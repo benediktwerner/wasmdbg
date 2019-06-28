@@ -2,6 +2,9 @@ extern crate parity_wasm;
 
 use parity_wasm::{elements::Module, SerializationError};
 
+mod vm;
+use vm::VM;
+
 struct File {
     file_path: String,
     module: Module,
@@ -9,12 +12,15 @@ struct File {
 
 pub struct Debugger {
     file: Option<File>,
+    vm: Option<VM>,
 }
-
 
 impl Debugger {
     pub fn new() -> Debugger {
-        Debugger { file: None }
+        Debugger {
+            file: None,
+            vm: None,
+        }
     }
 
     pub fn load_file(&mut self, file_path: &str) -> Result<(), SerializationError> {
@@ -22,6 +28,7 @@ impl Debugger {
             file_path: file_path.to_owned(),
             module: parity_wasm::deserialize_file(file_path)?,
         });
+        self.vm = None;
         Ok(())
     }
 }
