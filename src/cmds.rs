@@ -2,8 +2,9 @@ use crate::Debugger;
 
 pub struct Command {
     pub name: &'static str,
-    pub abrvs: Vec<&'static str>,
-    pub help: &'static str,
+    pub aliases: Vec<&'static str>,
+    pub description: Option<&'static str>,
+    pub help: Option<&'static str>,
     pub requires_file: bool,
     pub requires_running: bool,
     pub argc: usize,
@@ -15,8 +16,9 @@ impl Command {
         Command {
             name,
             handler,
-            abrvs: Vec::new(),
-            help: "No help for this command",
+            aliases: Vec::new(),
+            description: None,
+            help: None,
             argc: 0,
             requires_file: false,
             requires_running: false,
@@ -26,21 +28,48 @@ impl Command {
     pub fn handle(&self, dbg: &mut Debugger, args: &Vec<&str>) {
         if args.len() != self.argc {
             println!(
-                "Invalid number of arguments! \"{}\" takes exactly {} args.",
-                self.name, self.argc
+                "\"{}\" takes exactly {} args but {} found",
+                self.name,
+                self.argc,
+                args.len()
             );
+            return;
+        }
+        if self.requires_file && dbg.file().is_none() {
+            println!("No wasm binary loaded.\nUse the \"load\" command to load one.");
+            return;
+        }
+        if self.requires_running && dbg.vm().is_none() {
+            println!("The binary is not being run.");
             return;
         }
         (self.handler)(dbg, args);
     }
 
-    pub fn abrv(mut self, abrv: &'static str) -> Self {
-        self.abrvs.push(abrv);
+    pub fn names(&self) -> String {
+        if self.aliases.is_empty() {
+            self.name.to_string()
+        } else {
+            format!("{}, {}", self.name, self.aliases.join(", "))
+        }
+    }
+
+    pub fn has_name(&self, name: &str) -> bool {
+        self.name == name || self.aliases.iter().any(|&x| x == name)
+    }
+
+    pub fn alias(mut self, alias: &'static str) -> Self {
+        self.aliases.push(alias);
+        self
+    }
+
+    pub fn description(mut self, description: &'static str) -> Self {
+        self.description = Some(description);
         self
     }
 
     pub fn help(mut self, help: &'static str) -> Self {
-        self.help = help;
+        self.help = Some(help);
         self
     }
 
@@ -56,10 +85,109 @@ impl Command {
 
     pub fn requires_running(mut self) -> Self {
         self.requires_running = true;
-        self
+        self.requires_file()
+    }
+}
+
+pub struct Commands {
+    commands: Vec<Command>,
+}
+
+impl Commands {
+    pub fn new() -> Commands {
+        let mut commands = Vec::new();
+        commands.push(
+            Command::new("load", &cmd_load)
+                .takes_args(1)
+                .description("Load a wasm binary")
+                .help("load FILE\n\nLoad the wasm binary FILE."),
+        );
+        commands.push(
+            Command::new("info", &cmd_info)
+                .description("Print info about the currently loaded binary")
+                .requires_file(),
+        );
+        commands.push(
+            Command::new("run", &cmd_run)
+                .description("Run the currently loaded binary")
+                .requires_file(),
+        );
+
+        return Commands { commands };
     }
 
-    pub fn name(&self) -> &str {
-        self.name
+    fn find_by_name(&self, name: &str) -> Option<&Command> {
+        for cmd in &self.commands {
+            if cmd.has_name(name) {
+                return Some(cmd);
+            }
+        }
+        return None;
     }
+
+    pub fn run_line(&self, dbg: &mut Debugger, line: &str) -> bool {
+        let mut args_iter = line.split_whitespace();
+
+        if let Some(cmd_name) = args_iter.next() {
+            match cmd_name {
+                "help" => self.print_help(&args_iter.collect()),
+                "quit" | "exit" => {
+                    return true;
+                }
+                "" => (),
+                _ => match self.find_by_name(cmd_name) {
+                    Some(cmd) => cmd.handle(dbg, &args_iter.collect()),
+                    None => println!("Unknown command: \"{}\". Try \"help\".", cmd_name),
+                },
+            }
+        }
+
+        return false;
+    }
+
+    fn print_help(&self, args: &Vec<&str>) {
+        if args.is_empty() {
+            println!("quit/exit - Exit wasmdbg");
+            for cmd in &self.commands {
+                match cmd.description {
+                    Some(description) => println!("{} - {}", cmd.names(), description),
+                    None => println!("{}", cmd.names()),
+                }
+            }
+            println!("\nType \"help\" followed by a command to learn more about it.")
+        } else {
+            let cmd_name = args[0];
+            match self.find_by_name(cmd_name) {
+                Some(cmd) => println!(
+                    "{}",
+                    cmd.help
+                        .or(cmd.description)
+                        .unwrap_or("No help for this command")
+                ),
+                None => println!("Unknown command: \"{}\". Try \"help\".", cmd_name),
+            }
+        }
+    }
+}
+
+fn cmd_load(dbg: &mut Debugger, args: &Vec<&str>) {
+    let file_path = args[0];
+    dbg.load_file(file_path).unwrap();
+    println!("Loaded \"{}\"", file_path);
+}
+
+fn cmd_info(dbg: &mut Debugger, _args: &Vec<&str>) {
+    let file = dbg.file().unwrap();
+    let module = file.module();
+
+    println!("File: {}", file.file_path());
+
+    match module.function_section() {
+        Some(func_sec) => println!("{} functions", func_sec.entries().len()),
+        None => println!("No functions"),
+    }
+}
+
+fn cmd_run(_dbg: &mut Debugger, _args: &Vec<&str>) {
+    println!("Not implemented");
 }
