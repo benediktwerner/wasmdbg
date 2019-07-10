@@ -7,3 +7,4 @@ edition = "2018"
 [dependencies]
 parity-wasm = "0.38"
 clap = "2.33"
+colored = "1.8"

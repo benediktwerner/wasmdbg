@@ -1,9 +1,11 @@
 extern crate clap;
 extern crate wasmdbg;
+extern crate colored;
 
 use clap::{App, Arg};
 use std::io::{self, BufRead, Write};
 use wasmdbg::Debugger;
+use colored::*;
 
 mod cmds;
 use cmds::Command;
@@ -36,7 +38,7 @@ fn main() {
     commands.push(Command::new("test", &test).help("This is a test command"));
 
     loop {
-        print!("wasmdbg> ");
+        print!("{}", "wasmdbg> ".red());
         io::stdout().flush().unwrap();
 
         if let Some(line) = io::stdin().lock().lines().next() {
