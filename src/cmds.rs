@@ -11,11 +11,11 @@ pub struct Command {
     pub requires_file: bool,
     pub requires_running: bool,
     pub argc: usize,
-    pub handler: &'static Fn(&mut Debugger, &Vec<&str>),
+    pub handler: &'static Fn(&mut Debugger, &[&str]),
 }
 
 impl Command {
-    pub fn new(name: &'static str, handler: &'static Fn(&mut Debugger, &Vec<&str>)) -> Command {
+    pub fn new(name: &'static str, handler: &'static Fn(&mut Debugger, &[&str])) -> Command {
         Command {
             name,
             handler,
@@ -28,7 +28,7 @@ impl Command {
         }
     }
 
-    pub fn handle(&self, dbg: &mut Debugger, args: &Vec<&str>) {
+    pub fn handle(&self, dbg: &mut Debugger, args: &[&str]) {
         if args.len() != self.argc {
             println!(
                 "\"{}\" takes exactly {} args but {} found",
@@ -116,7 +116,7 @@ impl Commands {
                 .requires_file(),
         );
 
-        return Commands { commands };
+        Commands { commands }
     }
 
     fn find_by_name(&self, name: &str) -> Option<&Command> {
@@ -125,7 +125,7 @@ impl Commands {
                 return Some(cmd);
             }
         }
-        return None;
+        None
     }
 
     pub fn run_line(&self, dbg: &mut Debugger, line: &str) -> bool {
@@ -133,33 +133,23 @@ impl Commands {
 
         if let Some(cmd_name) = args_iter.next() {
             match cmd_name {
-                "help" => self.print_help(&args_iter.collect()),
+                "help" => self.print_help(args_iter.next()),
                 "quit" | "exit" => {
                     return true;
                 }
                 "" => (),
                 _ => match self.find_by_name(cmd_name) {
-                    Some(cmd) => cmd.handle(dbg, &args_iter.collect()),
+                    Some(cmd) => cmd.handle(dbg, &args_iter.collect::<Vec<&str>>()),
                     None => println!("Unknown command: \"{}\". Try \"help\".", cmd_name),
                 },
             }
         }
 
-        return false;
+        false
     }
 
-    fn print_help(&self, args: &Vec<&str>) {
-        if args.is_empty() {
-            println!("quit/exit - Exit wasmdbg");
-            for cmd in &self.commands {
-                match cmd.description {
-                    Some(description) => println!("{} - {}", cmd.names(), description),
-                    None => println!("{}", cmd.names()),
-                }
-            }
-            println!("\nType \"help\" followed by a command to learn more about it.")
-        } else {
-            let cmd_name = args[0];
+    fn print_help(&self, cmd_name: Option<&str>) {
+        if let Some(cmd_name) = cmd_name {
             match self.find_by_name(cmd_name) {
                 Some(cmd) => println!(
                     "{}",
@@ -169,6 +159,15 @@ impl Commands {
                 ),
                 None => println!("Unknown command: \"{}\". Try \"help\".", cmd_name),
             }
+        } else {
+            println!("quit/exit - Exit wasmdbg");
+            for cmd in &self.commands {
+                match cmd.description {
+                    Some(description) => println!("{} - {}", cmd.names(), description),
+                    None => println!("{}", cmd.names()),
+                }
+            }
+            println!("\nType \"help\" followed by a command to learn more about it.")
         }
     }
 }
@@ -186,11 +185,11 @@ pub fn load_file(dbg: &mut Debugger, file_path: &str) {
     }
 }
 
-fn cmd_load(dbg: &mut Debugger, args: &Vec<&str>) {
+fn cmd_load(dbg: &mut Debugger, args: &[&str]) {
     load_file(dbg, args[0]);
 }
 
-fn cmd_info(dbg: &mut Debugger, _args: &Vec<&str>) {
+fn cmd_info(dbg: &mut Debugger, _args: &[&str]) {
     let file = dbg.file().unwrap();
     let module = file.module();
 
@@ -202,6 +201,6 @@ fn cmd_info(dbg: &mut Debugger, _args: &Vec<&str>) {
     }
 }
 
-fn cmd_run(_dbg: &mut Debugger, _args: &Vec<&str>) {
+fn cmd_run(_dbg: &mut Debugger, _args: &[&str]) {
     println!("Not implemented");
 }

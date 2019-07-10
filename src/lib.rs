@@ -17,6 +17,7 @@ pub struct File {
     module: Module,
 }
 
+#[derive(Default)]
 pub struct Debugger {
     file: Option<File>,
     vm: Option<VM>,
@@ -33,7 +34,7 @@ impl File {
 }
 
 impl Debugger {
-    pub fn new() -> Debugger {
+    pub fn new() -> Self {
         Debugger {
             file: None,
             vm: None,
@@ -56,7 +57,7 @@ impl Debugger {
         self.file = Some(File {
             file_path: file_path.to_owned(),
             module: parity_wasm::deserialize_file(file_path)
-                .map_err(|e| LoadError::SerializationError(e))?,
+                .map_err(LoadError::SerializationError)?,
         });
         self.vm = None;
 

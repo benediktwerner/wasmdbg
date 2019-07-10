@@ -1,6 +1,5 @@
 extern crate parity_wasm;
 
-use std::mem;
 use parity_wasm::elements::{Module, Instruction};
 
 
@@ -49,7 +48,7 @@ impl VM {
     pub fn new(module: Box<Module>) -> VM {
         VM {
             memory: Memory::new(),
-            module: module,
+            module,
             ip: CodePosition(0, 0),
             value_stack: Vec::new(),
             label_stack: Vec::new(),
@@ -149,8 +148,8 @@ impl VM {
 
             Instruction::I32Const(val) => self.push(Value::I32(val)),
             Instruction::I64Const(val) => self.push(Value::I64(val)),
-            Instruction::F32Const(val) => self.push(Value::F32(reinterpret_u32_f32(val))),
-            Instruction::F64Const(val) => self.push(Value::F64(reinterpret_u64_f64(val))),
+            Instruction::F32Const(val) => self.push(Value::F32(f32::from_bits(val))),
+            Instruction::F64Const(val) => self.push(Value::F64(f64::from_bits(val))),
 
             Instruction::I32Eqz => (),
             Instruction::I32Eq => (),
@@ -298,11 +297,4 @@ impl VM {
             Ok(())
         }
     }
-}
-
-fn reinterpret_u32_f32(i: u32) -> f32 {
-    unsafe { mem::transmute::<u32, f32>(i) }
-}
-fn reinterpret_u64_f64(i: u64) -> f64 {
-    unsafe { mem::transmute::<u64, f64>(i) }
 }
