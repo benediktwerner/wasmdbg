@@ -1,4 +1,7 @@
-use crate::Debugger;
+extern crate wasmdbg;
+
+use wasmdbg::{Debugger, LoadError};
+
 
 pub struct Command {
     pub name: &'static str,
@@ -170,10 +173,21 @@ impl Commands {
     }
 }
 
+pub fn load_file(dbg: &mut Debugger, file_path: &str) {
+    if let Err(error) = dbg.load_file(file_path) {
+        match error {
+            LoadError::FileNotFound => println!("File not found: \"{}\"", file_path),
+            LoadError::SerializationError(serialization_error) => {
+                println!("Error while loading file: {}", serialization_error)
+            }
+        }
+    } else {
+        println!("Loaded \"{}\"", file_path);
+    }
+}
+
 fn cmd_load(dbg: &mut Debugger, args: &Vec<&str>) {
-    let file_path = args[0];
-    dbg.load_file(file_path).unwrap();
-    println!("Loaded \"{}\"", file_path);
+    load_file(dbg, args[0]);
 }
 
 fn cmd_info(dbg: &mut Debugger, _args: &Vec<&str>) {

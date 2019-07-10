@@ -1,14 +1,15 @@
 extern crate clap;
-extern crate wasmdbg;
 extern crate colored;
+extern crate parity_wasm;
+extern crate wasmdbg;
 
 use clap::{App, Arg};
+use colored::*;
 use std::io::{self, BufRead, Write};
 use wasmdbg::Debugger;
-use colored::*;
 
 mod cmds;
-use cmds::Commands;
+use cmds::{Commands, load_file};
 
 
 fn main() {
@@ -18,19 +19,18 @@ fn main() {
         .get_matches();
 
     let mut dbg = Debugger::new();
-    if let Some(file_path) = matches.value_of("file") {
-        dbg.load_file(file_path).unwrap();
-        println!("Loaded \"{}\"", file_path);
-    }
+    let cmds = Commands::new();
 
-    let commands = Commands::new();
+    if let Some(file_path) = matches.value_of("file") {
+        load_file(&mut dbg, file_path);
+    }
 
     loop {
         print!("{}", "wasmdbg> ".red());
         io::stdout().flush().unwrap();
 
         if let Some(line) = io::stdin().lock().lines().next() {
-            if commands.run_line(&mut dbg, &line.unwrap()) {
+            if cmds.run_line(&mut dbg, &line.unwrap()) {
                 break;
             }
         } else {

@@ -1,9 +1,16 @@
 extern crate parity_wasm;
 
 use parity_wasm::{elements::Module, SerializationError};
+use std::path::Path;
 
 mod vm;
 use vm::VM;
+
+
+pub enum LoadError {
+    FileNotFound,
+    SerializationError(SerializationError),
+}
 
 pub struct File {
     file_path: String,
@@ -41,12 +48,18 @@ impl Debugger {
         self.vm.as_ref()
     }
 
-    pub fn load_file(&mut self, file_path: &str) -> Result<(), SerializationError> {
+    pub fn load_file(&mut self, file_path: &str) -> Result<(), LoadError> {
+        if !Path::new(file_path).exists() {
+            return Err(LoadError::FileNotFound);
+        }
+
         self.file = Some(File {
             file_path: file_path.to_owned(),
-            module: parity_wasm::deserialize_file(file_path)?,
+            module: parity_wasm::deserialize_file(file_path)
+                .map_err(|e| LoadError::SerializationError(e))?,
         });
         self.vm = None;
+
         Ok(())
     }
 }
