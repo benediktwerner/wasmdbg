@@ -1,6 +1,6 @@
 extern crate parity_wasm;
 
-use parity_wasm::elements::{Module, Instruction};
+use parity_wasm::elements::{Module, Instruction, ValueType, FuncBody, Type::Function};
 
 
 #[derive(Clone)]
@@ -18,11 +18,41 @@ enum Value {
     I64(i64),
     F32(f32),
     F64(f64),
+    V128(i128),
 }
 
-struct CodePosition(usize, usize);
-struct Label(usize);
-struct FunctionFrame(CodePosition, Vec<Value>);
+impl Value {
+    fn default(value_type: ValueType) -> Self {
+        match value_type {
+            ValueType::I32 => Value::I32(0),
+            ValueType::I64 => Value::I64(0),
+            ValueType::F32 => Value::F32(0),
+            ValueType::F64 => Value::F64(0),
+            ValueType::V128 => Value::V128(0),
+        }
+    }
+}
+
+#[derive(Default)]
+struct CodePosition {
+    func_index: usize,
+    instr_index: usize,
+}
+
+struct Label {
+    target_instr_index: Option<usize>,
+}
+
+impl Label {
+    fn new(target_instr_index: Option<usize>) -> Self {
+        Label {target_instr_index}
+    }
+}
+
+struct FunctionFrame {
+    ret_addr: CodePosition,
+    locals: Vec<Value>,
+}
 
 struct Memory {
     data: Vec<u8>,
@@ -32,6 +62,7 @@ pub struct VM {
     module: Box<Module>,
     memory: Memory,
     ip: CodePosition,
+    globals: Vec<Value>,
     value_stack: Vec<Value>,
     label_stack: Vec<Label>,
     function_stack: Vec<FunctionFrame>,
@@ -46,10 +77,21 @@ impl Memory {
 
 impl VM {
     pub fn new(module: Box<Module>) -> VM {
+        let mut globals = match module.global_section() {
+            Some(global_section) => {
+                let mut globals = Vec::with_capacity(global_section.entries().len());
+                for global in global_section.entries() {
+                    globals.push(Value::default(global.global_type().content_type()));
+                }
+                globals
+            },
+            None => Vec::new(),
+        };
         VM {
             memory: Memory::new(),
             module,
-            ip: CodePosition(0, 0),
+            ip: CodePosition::default(),
+            globals,
             value_stack: Vec::new(),
             label_stack: Vec::new(),
             function_stack: Vec::new(),
@@ -68,54 +110,130 @@ impl VM {
     }
 
     fn pop(&mut self) -> VMResult<Value> {
-        if let Some(val) = self.value_stack.pop() {
-            return Ok(val);
+        self.value_stack.pop().ok_or(Trap::PopFromEmptyStack)
+    }
+
+    fn locals(&self) -> &[Value] {
+        &self.function_stack.last().unwrap().locals
+    }
+
+    fn curr_func(&self) -> &FuncBody {
+        &self.module.code_section().unwrap().bodies()[self.ip.func_index]
+    }
+
+    fn curr_code(&self) -> &[Instruction] {
+        self.curr_func().code().elements()
+    }
+
+    fn branch(&mut self, index: u32) {
+        self.label_stack.truncate(self.label_stack.len() - index as usize);
+        match self.label_stack.pop().unwrap().target_instr_index {
+            Some(target) => self.ip.instr_index = target,
+            None => {
+                loop {
+                    match self.curr_code()[self.ip.instr_index] {
+                        Instruction::Block(_) => index += 1,
+                        Instruction::Loop(_) => index += 1,
+                        Instruction::End => index -= 1,
+                    }
+
+                    if index == 0 {
+                        break;
+                    }
+                }
+            },
         }
-        Err(Trap::PopFromEmptyStack)
     }
 
     pub fn execute_step(&mut self) -> VMResult<()> {
-        let CodePosition(func_index, instr_index) = self.ip;
-        let func = &self.module.code_section().unwrap().bodies()[func_index];
-        let instr = func.code().elements()[instr_index].clone();
-        self.ip.1 += 1;
+        let func = self.curr_func();
+        let instr = func.code().elements()[self.ip.instr_index].clone();
+        self.ip.instr_index += 1;
 
         match instr {
             Instruction::Unreachable => self.trap(Trap::ReachedUnreachable),
             Instruction::Nop => (),
-            Instruction::Block(_) => (),
-            Instruction::Loop(_) => (),
+            Instruction::Block(_) => self.label_stack.push(Label::new(None)),
+            Instruction::Loop(_) => self.label_stack.push(Label::new(Some(self.ip.instr_index))),
             Instruction::If(_) => (),
             Instruction::Else => (),
-            Instruction::End => (),
-            Instruction::Br(index) => (),
-            Instruction::BrIf(index) => (),
-            Instruction::BrTable(table_data) => (),
-            Instruction::Return => {
-                if let Some(FunctionFrame(new_ip, _)) = self.function_stack.pop() {
-                    self.ip = new_ip;
+            Instruction::End => {
+                if self.label_stack.pop().is_none() {
+                    let frame = self.function_stack.pop().unwrap();
+                    self.ip = frame.ret_addr;
+                }
+            },
+            Instruction::Br(index) => self.branch(index),
+            Instruction::BrIf(index) => {
+                if let Value::I32(val) = self.pop()? {
+                    if val != 0 {
+                        self.branch(index);
+                    }
                 }
                 else {
-                    self.trap(Trap::ExecutionFinished);
+                    panic!("Type error: Expected i32 on the stack");
                 }
             },
+            Instruction::BrTable(table_data) => (),
+            Instruction::Return => {
+                let frame = self.function_stack.pop().unwrap();
+                self.ip = frame.ret_addr;
+            },
 
+            // Calls
             Instruction::Call(index) => {
-                // let mut locals = Vec::new();
+                let func_type = self.module.function_section().unwrap().entries()[index as usize].type_ref();
+                let Function(func_type) = &self.module.type_section().unwrap().types()[func_type as usize];
+                let func = &self.module.code_section().unwrap().bodies()[index as usize];
                 
+                let params_count = func_type.params().len();
+                let locals_count = func.locals().len();
+                let mut locals = Vec::with_capacity(params_count + locals_count);
+
+                for _ in 0..params_count {
+                    locals.push(self.pop()?);
+                }
+                locals.reverse();
+
+                for local in func.locals() {
+                    let default_val = Value::default(local.value_type());
+                    for _ in 0..local.count() {
+                        locals.push(default_val);
+                    }
+                }
+
+                self.function_stack.push(FunctionFrame {
+                    ret_addr: self.ip,
+                    locals
+                });
+
+                self.ip = CodePosition { func_index: index as usize, instr_index: 0 };
             },
             Instruction::CallIndirect(signature, _) => (),
-
             Instruction::Drop => {
                 self.pop()?;
             },
             Instruction::Select => (),
-
-            Instruction::GetLocal(index) => (),
-            Instruction::SetLocal(index) => (),
-            Instruction::TeeLocal(index) => (),
-            Instruction::GetGlobal(index) => (),
-            Instruction::SetGlobal(index) => (),
+            Instruction::GetLocal(index) => {
+                let val = self.locals()[index as usize];
+                self.push(val);
+            },
+            Instruction::SetLocal(index) => {
+                let val = self.pop()?;
+                self.locals()[index as usize] = val;
+            },
+            Instruction::TeeLocal(index) => {
+                let val = self.value_stack.last().ok_or(Trap::PopFromEmptyStack)?;
+                self.locals()[index as usize] = *val;
+            },
+            Instruction::GetGlobal(index) => {
+                let val = self.globals[index as usize];
+                self.push(val);
+            },
+            Instruction::SetGlobal(index) => {
+                let val = self.pop()?;
+                self.globals[index as usize] = val;
+            },
 
             // All store/load instructions operate with 'memory immediates'
             // which represented here as (flag, offset) tuple
@@ -288,6 +406,10 @@ impl VM {
             Instruction::I64Extend16S => (),
             Instruction::I64Extend32S => (),
             _ => self.trap(Trap::UnknownInstruction(instr)),
+        }
+
+        if self.function_stack.is_empty() {
+            self.trap(Trap::ExecutionFinished);
         }
 
         if let Some(trap) = &self.trap {
