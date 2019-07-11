@@ -30,12 +30,16 @@ impl Command {
 
     pub fn handle(&self, dbg: &mut Debugger, args: &[&str]) {
         if args.len() != self.argc {
-            println!(
-                "\"{}\" takes exactly {} args but {} found",
-                self.name,
-                self.argc,
-                args.len()
-            );
+            if self.argc == 0 {
+                println!("\"{}\" takes no arguments", self.name);
+            } else {
+                println!(
+                    "\"{}\" takes exactly {} args but got {}",
+                    self.name,
+                    self.argc,
+                    args.len()
+                );
+            }
             return;
         }
         if self.requires_file && dbg.file().is_none() {
