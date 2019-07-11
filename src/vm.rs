@@ -1,6 +1,7 @@
 extern crate parity_wasm;
 
 use parity_wasm::elements::{FuncBody, Instruction, Module, Type::Function, ValueType};
+use std::any::Any;
 
 
 #[derive(Clone)]
@@ -9,6 +10,7 @@ pub enum Trap {
     UnknownInstruction(Instruction),
     PopFromEmptyStack,
     ExecutionFinished,
+    TypeError(ValueType, ValueType), // Expected, Found
 }
 
 type VMResult<T> = Result<T, Trap>;
@@ -31,6 +33,55 @@ impl Value {
             ValueType::F64 => Value::F64(0.0),
             ValueType::V128 => Value::V128(0),
         }
+    }
+
+    fn value_type(&self) -> ValueType {
+        match self {
+            Value::I32(_) => ValueType::I32,
+            Value::I64(_) => ValueType::I64,
+            Value::F32(_) => ValueType::F32,
+            Value::F64(_) => ValueType::F64,
+            Value::V128(_) => ValueType::V128,
+        }
+    }
+
+    fn value_as_any(&self) -> &Any {
+        match self {
+            Value::I32(ref val) => val,
+            Value::I64(ref val) => val,
+            Value::F32(ref val) => val,
+            Value::F64(ref val) => val,
+            Value::V128(ref val) => val,
+        }
+    }
+}
+
+trait Num: Copy + Any {
+    fn value_type() -> ValueType;
+}
+impl Num for u32 {
+    fn value_type() -> ValueType {
+        ValueType::I32
+    }
+}
+impl Num for u64 {
+    fn value_type() -> ValueType {
+        ValueType::I64
+    }
+}
+impl Num for f32 {
+    fn value_type() -> ValueType {
+        ValueType::F32
+    }
+}
+impl Num for f64 {
+    fn value_type() -> ValueType {
+        ValueType::F64
+    }
+}
+impl Num for u128 {
+    fn value_type() -> ValueType {
+        ValueType::V128
     }
 }
 
@@ -114,6 +165,18 @@ impl VM {
         self.value_stack.pop().ok_or(Trap::PopFromEmptyStack)
     }
 
+    fn pop_expect<T: Num>(&mut self) -> VMResult<T> {
+        if let Some(val) = self.value_stack.pop() {
+            if let Some(val) = val.value_as_any().downcast_ref::<T>() {
+                Ok(*val)
+            } else {
+                Err(Trap::TypeError(val.value_type(), T::value_type()))
+            }
+        } else {
+            Err(Trap::PopFromEmptyStack)
+        }
+    }
+
     fn locals(&mut self) -> &mut [Value] {
         &mut self.function_stack.last_mut().unwrap().locals
     }
@@ -169,13 +232,8 @@ impl VM {
             }
             Instruction::Br(index) => self.branch(index),
             Instruction::BrIf(index) => {
-                if let Value::I32(val) = self.pop()? {
-                    if val != 0 {
-                        self.branch(index);
-                    }
-                }
-                else {
-                    panic!("Type error: Expected i32 on the stack");
+                if self.pop_expect::<u32>()? != 0 {
+                    self.branch(index);
                 }
             }
             Instruction::BrTable(table_data) => (),
