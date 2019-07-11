@@ -46,7 +46,7 @@ struct Label {
 
 impl Label {
     fn new(target_instr_index: Option<usize>) -> Self {
-        Label {target_instr_index}
+        Label { target_instr_index }
     }
 }
 
@@ -78,14 +78,14 @@ impl Memory {
 
 impl VM {
     pub fn new(module: Box<Module>) -> VM {
-        let mut globals = match module.global_section() {
+        let globals = match module.global_section() {
             Some(global_section) => {
                 let mut globals = Vec::with_capacity(global_section.entries().len());
                 for global in global_section.entries() {
                     globals.push(Value::default(global.global_type().content_type()));
                 }
                 globals
-            },
+            }
             None => Vec::new(),
         };
         VM {
@@ -127,7 +127,8 @@ impl VM {
     }
 
     fn branch(&mut self, index: u32) {
-        self.label_stack.truncate(self.label_stack.len() - index as usize);
+        self.label_stack
+            .truncate(self.label_stack.len() - index as usize);
         match self.label_stack.pop().unwrap().target_instr_index {
             Some(target) => self.ip.instr_index = target,
             None => {
@@ -144,7 +145,7 @@ impl VM {
                         break;
                     }
                 }
-            },
+            }
         }
     }
 
@@ -165,7 +166,7 @@ impl VM {
                     let frame = self.function_stack.pop().unwrap();
                     self.ip = frame.ret_addr;
                 }
-            },
+            }
             Instruction::Br(index) => self.branch(index),
             Instruction::BrIf(index) => {
                 if let Value::I32(val) = self.pop()? {
@@ -176,12 +177,12 @@ impl VM {
                 else {
                     panic!("Type error: Expected i32 on the stack");
                 }
-            },
+            }
             Instruction::BrTable(table_data) => (),
             Instruction::Return => {
                 let frame = self.function_stack.pop().unwrap();
                 self.ip = frame.ret_addr;
-            },
+            }
 
             // Calls
             Instruction::Call(index) => {
@@ -211,21 +212,24 @@ impl VM {
                     locals,
                 });
 
-                self.ip = CodePosition { func_index: index as usize, instr_index: 0 };
-            },
+                self.ip = CodePosition {
+                    func_index: index as usize,
+                    instr_index: 0,
+                };
+            }
             Instruction::CallIndirect(signature, _) => (),
             Instruction::Drop => {
                 self.pop()?;
-            },
+            }
             Instruction::Select => (),
             Instruction::GetLocal(index) => {
                 let val = self.locals()[index as usize].clone();
                 self.push(val);
-            },
+            }
             Instruction::SetLocal(index) => {
                 let val = self.pop()?;
                 self.locals()[index as usize] = val;
-            },
+            }
             Instruction::TeeLocal(index) => {
                 let val = self
                     .value_stack
@@ -237,11 +241,11 @@ impl VM {
             Instruction::GetGlobal(index) => {
                 let val = self.globals[index as usize].clone();
                 self.push(val);
-            },
+            }
             Instruction::SetGlobal(index) => {
                 let val = self.pop()?;
                 self.globals[index as usize] = val;
-            },
+            }
 
             // All store/load instructions operate with 'memory immediates'
             // which represented here as (flag, offset) tuple
@@ -422,8 +426,7 @@ impl VM {
 
         if let Some(trap) = &self.trap {
             Err(trap.to_owned())
-        }
-        else {
+        } else {
             Ok(())
         }
     }
