@@ -116,6 +116,7 @@ impl Commands {
         );
         commands.push(
             Command::new("run", &cmd_run)
+                .alias("r")
                 .description("Run the currently loaded binary")
                 .requires_file(),
         );
