@@ -1,6 +1,6 @@
 extern crate parity_wasm;
 
-use parity_wasm::elements::{Module, Instruction, ValueType, FuncBody, Type::Function};
+use parity_wasm::elements::{FuncBody, Instruction, Module, Type::Function, ValueType};
 
 
 #[derive(Clone)]
@@ -13,6 +13,7 @@ pub enum Trap {
 
 type VMResult<T> = Result<T, Trap>;
 
+#[derive(Clone)]
 enum Value {
     I32(u32),
     I64(u64),
@@ -33,7 +34,7 @@ impl Value {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct CodePosition {
     func_index: usize,
     instr_index: usize,
@@ -113,8 +114,8 @@ impl VM {
         self.value_stack.pop().ok_or(Trap::PopFromEmptyStack)
     }
 
-    fn locals(&self) -> &[Value] {
-        &self.function_stack.last().unwrap().locals
+    fn locals(&mut self) -> &mut [Value] {
+        &mut self.function_stack.last_mut().unwrap().locals
     }
 
     fn curr_func(&self) -> &FuncBody {
@@ -130,11 +131,13 @@ impl VM {
         match self.label_stack.pop().unwrap().target_instr_index {
             Some(target) => self.ip.instr_index = target,
             None => {
+                let mut index = index;
                 loop {
                     match self.curr_code()[self.ip.instr_index] {
                         Instruction::Block(_) => index += 1,
                         Instruction::Loop(_) => index += 1,
                         Instruction::End => index -= 1,
+                        _ => (),
                     }
 
                     if index == 0 {
@@ -182,29 +185,30 @@ impl VM {
 
             // Calls
             Instruction::Call(index) => {
-                let func_type = self.module.function_section().unwrap().entries()[index as usize].type_ref();
-                let Function(func_type) = &self.module.type_section().unwrap().types()[func_type as usize];
-                let func = &self.module.code_section().unwrap().bodies()[index as usize];
-                
+                let func_type =
+                    self.module.function_section().unwrap().entries()[index as usize].type_ref();
+                let Function(func_type) =
+                    &self.module.type_section().unwrap().types()[func_type as usize];
+
                 let params_count = func_type.params().len();
-                let locals_count = func.locals().len();
-                let mut locals = Vec::with_capacity(params_count + locals_count);
+                let mut locals = Vec::new();
 
                 for _ in 0..params_count {
                     locals.push(self.pop()?);
                 }
                 locals.reverse();
 
+                let func = &self.module.code_section().unwrap().bodies()[index as usize];
                 for local in func.locals() {
                     let default_val = Value::default(local.value_type());
                     for _ in 0..local.count() {
-                        locals.push(default_val);
+                        locals.push(default_val.clone());
                     }
                 }
 
                 self.function_stack.push(FunctionFrame {
-                    ret_addr: self.ip,
-                    locals
+                    ret_addr: self.ip.clone(),
+                    locals,
                 });
 
                 self.ip = CodePosition { func_index: index as usize, instr_index: 0 };
@@ -215,7 +219,7 @@ impl VM {
             },
             Instruction::Select => (),
             Instruction::GetLocal(index) => {
-                let val = self.locals()[index as usize];
+                let val = self.locals()[index as usize].clone();
                 self.push(val);
             },
             Instruction::SetLocal(index) => {
@@ -223,11 +227,15 @@ impl VM {
                 self.locals()[index as usize] = val;
             },
             Instruction::TeeLocal(index) => {
-                let val = self.value_stack.last().ok_or(Trap::PopFromEmptyStack)?;
-                self.locals()[index as usize] = *val;
-            },
+                let val = self
+                    .value_stack
+                    .last()
+                    .ok_or(Trap::PopFromEmptyStack)?
+                    .clone();
+                self.locals()[index as usize] = val;
+            }
             Instruction::GetGlobal(index) => {
-                let val = self.globals[index as usize];
+                let val = self.globals[index as usize].clone();
                 self.push(val);
             },
             Instruction::SetGlobal(index) => {
@@ -265,7 +273,7 @@ impl VM {
             Instruction::GrowMemory(_) => (),
 
             Instruction::I32Const(val) => self.push(Value::I32(val as u32)),
-            Instruction::I64Const(val) => self.push(Value::I64(val as u32)),
+            Instruction::I64Const(val) => self.push(Value::I64(val as u64)),
             Instruction::F32Const(val) => self.push(Value::F32(f32::from_bits(val))),
             Instruction::F64Const(val) => self.push(Value::F64(f64::from_bits(val))),
 
