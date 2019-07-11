@@ -14,11 +14,11 @@ pub enum Trap {
 type VMResult<T> = Result<T, Trap>;
 
 enum Value {
-    I32(i32),
-    I64(i64),
+    I32(u32),
+    I64(u64),
     F32(f32),
     F64(f64),
-    V128(i128),
+    V128(u128),
 }
 
 impl Value {
@@ -26,8 +26,8 @@ impl Value {
         match value_type {
             ValueType::I32 => Value::I32(0),
             ValueType::I64 => Value::I64(0),
-            ValueType::F32 => Value::F32(0),
-            ValueType::F64 => Value::F64(0),
+            ValueType::F32 => Value::F32(0.0),
+            ValueType::F64 => Value::F64(0.0),
             ValueType::V128 => Value::V128(0),
         }
     }
@@ -264,8 +264,8 @@ impl VM {
             Instruction::CurrentMemory(_) => (),
             Instruction::GrowMemory(_) => (),
 
-            Instruction::I32Const(val) => self.push(Value::I32(val)),
-            Instruction::I64Const(val) => self.push(Value::I64(val)),
+            Instruction::I32Const(val) => self.push(Value::I32(val as u32)),
+            Instruction::I64Const(val) => self.push(Value::I64(val as u32)),
             Instruction::F32Const(val) => self.push(Value::F32(f32::from_bits(val))),
             Instruction::F64Const(val) => self.push(Value::F64(f64::from_bits(val))),
 
