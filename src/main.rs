@@ -12,9 +12,12 @@ mod cmds;
 use cmds::{Commands, load_file};
 
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+
 fn main() {
     let matches = App::new("wasmdbg")
-        .version("0.1.0")
+        .version(VERSION)
         .arg(Arg::with_name("file").help("The wasm binary to debug"))
         .get_matches();
 
