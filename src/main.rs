@@ -1,15 +1,19 @@
+#[macro_use]
+extern crate lazy_static;
+
 extern crate clap;
 extern crate colored;
 extern crate parity_wasm;
 extern crate wasmdbg;
 
 use clap::{App, Arg};
-use colored::*;
-use std::io::{self, BufRead, Write};
 use wasmdbg::Debugger;
 
 mod cmds;
-use cmds::{Commands, load_file};
+mod readline;
+
+use cmds::{load_file, Commands};
+use readline::Readline;
 
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -23,20 +27,14 @@ fn main() {
 
     let mut dbg = Debugger::new();
     let cmds = Commands::new();
+    let mut rl = Readline::new(&cmds);
 
     if let Some(file_path) = matches.value_of("file") {
         load_file(&mut dbg, file_path);
     }
 
-    loop {
-        print!("{}", "wasmdbg> ".red());
-        io::stdout().flush().unwrap();
-
-        if let Some(line) = io::stdin().lock().lines().next() {
-            if cmds.run_line(&mut dbg, &line.unwrap()) {
-                break;
-            }
-        } else {
+    while let Some(line) = rl.readline() {
+        if cmds.run_line(&mut dbg, &line) {
             break;
         }
     }

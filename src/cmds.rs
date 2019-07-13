@@ -97,7 +97,7 @@ impl Command {
 }
 
 pub struct Commands {
-    commands: Vec<Command>,
+    pub commands: Vec<Command>,
 }
 
 impl Commands {
