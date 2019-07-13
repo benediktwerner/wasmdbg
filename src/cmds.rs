@@ -103,6 +103,12 @@ pub struct Commands {
 impl Commands {
     pub fn new() -> Commands {
         let mut commands = Vec::new();
+        commands.push(Command::new("help", cmd_unreachable).description("Show help"));
+        commands.push(
+            Command::new("exit", cmd_unreachable)
+                .alias("quit")
+                .description("Exit wasmdbg"),
+        );
         commands.push(
             Command::new("load", cmd_load)
                 .takes_args(1)
@@ -124,7 +130,7 @@ impl Commands {
         Commands { commands }
     }
 
-    fn find_by_name(&self, name: &str) -> Option<&Command> {
+    pub fn find_by_name(&self, name: &str) -> Option<&Command> {
         for cmd in &self.commands {
             if cmd.has_name(name) {
                 return Some(cmd);
@@ -165,7 +171,6 @@ impl Commands {
                 None => println!("Unknown command: \"{}\". Try \"help\".", cmd_name),
             }
         } else {
-            println!("quit/exit - Exit wasmdbg");
             for cmd in &self.commands {
                 match cmd.description {
                     Some(description) => println!("{} - {}", cmd.names(), description),
@@ -188,6 +193,10 @@ pub fn load_file(dbg: &mut Debugger, file_path: &str) {
     } else {
         println!("Loaded \"{}\"", file_path);
     }
+}
+
+fn cmd_unreachable(_dbg: &mut Debugger, _args: &[&str]) {
+    unreachable!();
 }
 
 fn cmd_load(dbg: &mut Debugger, args: &[&str]) {
