@@ -3,7 +3,7 @@ extern crate parity_wasm;
 use parity_wasm::{elements::Module, SerializationError};
 use std::path::Path;
 
-mod vm;
+pub mod vm;
 use vm::VM;
 
 
