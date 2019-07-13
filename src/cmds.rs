@@ -11,11 +11,11 @@ pub struct Command {
     pub requires_file: bool,
     pub requires_running: bool,
     pub argc: usize,
-    pub handler: &'static Fn(&mut Debugger, &[&str]),
+    pub handler: fn(&mut Debugger, &[&str]),
 }
 
 impl Command {
-    pub fn new(name: &'static str, handler: &'static Fn(&mut Debugger, &[&str])) -> Command {
+    pub fn new(name: &'static str, handler: fn(&mut Debugger, &[&str])) -> Command {
         Command {
             name,
             handler,
@@ -104,18 +104,18 @@ impl Commands {
     pub fn new() -> Commands {
         let mut commands = Vec::new();
         commands.push(
-            Command::new("load", &cmd_load)
+            Command::new("load", cmd_load)
                 .takes_args(1)
                 .description("Load a wasm binary")
                 .help("load FILE\n\nLoad the wasm binary FILE."),
         );
         commands.push(
-            Command::new("info", &cmd_info)
+            Command::new("info", cmd_info)
                 .description("Print info about the currently loaded binary")
                 .requires_file(),
         );
         commands.push(
-            Command::new("run", &cmd_run)
+            Command::new("run", cmd_run)
                 .alias("r")
                 .description("Run the currently loaded binary")
                 .requires_file(),
