@@ -1,139 +1,119 @@
-extern crate rustyline;
+extern crate linefeed;
 extern crate shellexpand;
 
-use std::io::ErrorKind;
+use std::io;
+use std::sync::Arc;
 
 use colored::*;
-use rustyline::completion::{Completer, FilenameCompleter, Pair};
-use rustyline::error::ReadlineError;
-use rustyline::highlight::Highlighter;
-use rustyline::hint::Hinter;
-use rustyline::{CompletionType, Config, Context, Editor, Helper};
 
-use crate::cmds::Commands;
+use linefeed::complete::{Completer, Completion, PathCompleter};
+use linefeed::terminal::{DefaultTerminal, Terminal};
+use linefeed::{Interface, Prompter, ReadResult};
+
+use crate::cmds::{Command, Commands};
 
 lazy_static! {
     static ref HISTORY_FILE_PATH: String = shellexpand::tilde("~/.wasmdbg_history").to_string();
 }
 
-fn pair_from_string(s: &'static str) -> Pair {
-    let mut replacement = s.to_string();
-    replacement.push(' ');
-    Pair {
-        display: s.to_string(),
-        replacement,
-    }
+
+fn find_cmds<'a>(cmds: &'a Commands, prefix: &str) -> Vec<&'a Command> {
+    cmds.commands
+        .iter()
+        .filter(|cmd| {
+            cmd.name.starts_with(prefix)
+                || cmd.aliases.iter().any(|&alias| alias.starts_with(prefix))
+        })
+        .collect()
 }
 
-struct MyHelper<'a> {
-    filename_completer: FilenameCompleter,
-    cmds: &'a Commands,
+struct MyCompleter {
+    cmds: Arc<Commands>,
+    path_completer: PathCompleter,
 }
 
-impl<'a> MyHelper<'a> {
-    fn new(cmds: &'a Commands) -> Self {
-        MyHelper {
-            filename_completer: FilenameCompleter::new(),
+impl MyCompleter {
+    fn new(cmds: Arc<Commands>) -> Self {
+        MyCompleter {
             cmds,
+            path_completer: PathCompleter,
         }
     }
 }
 
-impl<'a> Completer for MyHelper<'a> {
-    type Candidate = Pair;
-
+impl<Term: Terminal> Completer<Term> for MyCompleter {
     fn complete(
         &self,
-        line: &str,
-        pos: usize,
-        ctx: &Context<'_>,
-    ) -> Result<(usize, Vec<Pair>), ReadlineError> {
-        let mut words = line.split_whitespace();
+        curr_word: &str,
+        prompter: &Prompter<Term>,
+        start: usize,
+        end: usize,
+    ) -> Option<Vec<Completion>> {
+        let line = prompter.buffer();
+        let mut words = line[..start].split_whitespace();
 
         match words.next() {
-            Some(word) => {
-                let mut canidates = Vec::new();
-                for cmd in &self.cmds.commands {
-                    if cmd.name.starts_with(word)
-                        || cmd.aliases.iter().any(|&alias| alias.starts_with(word))
-                    {
-                        canidates.push(cmd);
-                    }
+            Some(word) => match self.cmds.find_by_name(word) {
+                Some(cmd) if cmd.argc > 0 => {
+                    self.path_completer.complete(curr_word, prompter, start, end)
                 }
-                if words.count() > 0 || line[..pos].chars().last().unwrap().is_whitespace() {
-                    match canidates.pop() {
-                        Some(cmd) if cmd.argc > 0 => {
-                            self.filename_completer.complete(line, pos, ctx)
-                        }
-                        _ => Ok((0, Vec::new())),
-                    }
-                } else {
-                    Ok((
-                        0,
-                        canidates
-                            .iter()
-                            .map(|cmd| pair_from_string(cmd.name))
-                            .collect(),
-                    ))
-                }
-            }
-            None => Ok((
-                0,
-                self.cmds
-                    .commands
+                _ => None,
+            },
+            None => Some(
+                find_cmds(&self.cmds, curr_word)
                     .iter()
-                    .map(|cmd| pair_from_string(cmd.name))
+                    .map(|cmd| Completion::simple(cmd.name.to_string()))
                     .collect(),
-            )),
+            ),
         }
     }
 }
 
-impl<'a> Hinter for MyHelper<'a> {}
-impl<'a> Highlighter for MyHelper<'a> {}
-impl<'a> Helper for MyHelper<'a> {}
 
-pub struct Readline<'a> {
-    editor: Editor<MyHelper<'a>>,
+pub struct Readline {
+    interface: Interface<DefaultTerminal>,
 }
 
-impl<'a> Readline<'a> {
-    pub fn new(cmds: &'a Commands) -> Self {
-        let config = Config::builder()
-            .completion_type(CompletionType::List)
-            .build();
-        let mut editor = Editor::with_config(config);
-        let rl_helper = MyHelper::new(cmds);
-        editor.set_helper(Some(rl_helper));
+impl Readline {
+    pub fn new(cmds: Arc<Commands>) -> Self {
+        let interface = Interface::new("wasmdbg").unwrap();
+        interface.set_completer(Arc::new(MyCompleter::new(cmds)));
+        interface
+            .set_prompt(&"wasmdbg> ".red().to_string())
+            .unwrap();
 
-        if let Err(error) = editor.load_history(&*HISTORY_FILE_PATH) {
-            match error {
-                ReadlineError::Io(ref io_error) if io_error.kind() == ErrorKind::NotFound => (),
-                _ => println!("Error while loading command history: {:?}", error),
+        if let Err(error) = interface.load_history(&*HISTORY_FILE_PATH) {
+            if error.kind() != io::ErrorKind::NotFound {
+                println!("Error while loading command history: {:?}", error);
             }
         }
 
-        Readline { editor }
+        Readline { interface }
     }
 
     pub fn readline(&mut self) -> Option<String> {
         loop {
-            match self.editor.readline(&"wasmdbg> ".red().to_string()) {
-                Ok(line) => {
-                    self.editor.add_history_entry(line.as_str());
-                    return Some(line);
+            match self.interface.read_line() {
+                Ok(result) => match result {
+                    ReadResult::Input(line) => {
+                        self.interface.add_history_unique(line.clone());
+                        return Some(line);
+                    }
+                    ReadResult::Eof => return None,
+                    _ => (),
+                },
+                Err(error) => {
+                    println!("Error on readline: {}", error);
+                    return None;
                 }
-                Err(ReadlineError::Interrupted) => (),
-                Err(ReadlineError::Eof) => return None,
-                Err(error) => println!("Error on readline: {}", error),
             }
         }
     }
 }
 
-impl<'a> Drop for Readline<'a> {
+impl Drop for Readline {
     fn drop(&mut self) {
-        if let Err(error) = self.editor.save_history(&*HISTORY_FILE_PATH) {
+        if let Err(error) = self.interface.save_history(&*HISTORY_FILE_PATH) {
             println!("Error while saving command history: {}", error);
         }
     }

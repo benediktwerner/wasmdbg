@@ -6,6 +6,8 @@ extern crate colored;
 extern crate parity_wasm;
 extern crate wasmdbg;
 
+use std::sync::Arc;
+
 use clap::{App, Arg};
 use wasmdbg::Debugger;
 
@@ -26,8 +28,8 @@ fn main() {
         .get_matches();
 
     let mut dbg = Debugger::new();
-    let cmds = Commands::new();
-    let mut rl = Readline::new(&cmds);
+    let cmds = Arc::new(Commands::new());
+    let mut rl = Readline::new(cmds.clone());
 
     if let Some(file_path) = matches.value_of("file") {
         load_file(&mut dbg, file_path);
