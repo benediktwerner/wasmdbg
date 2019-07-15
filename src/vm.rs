@@ -1,7 +1,7 @@
 extern crate parity_wasm;
 
 use parity_wasm::elements::{FuncBody, Instruction, Module, Type::Function, ValueType};
-use std::any::Any;
+use crate::value::{Value, Num, LittleEndianConvert, ExtendTo, WrapTo};
 
 
 #[derive(Clone)]
@@ -14,76 +14,6 @@ pub enum Trap {
 }
 
 type VMResult<T> = Result<T, Trap>;
-
-#[derive(Clone)]
-enum Value {
-    I32(u32),
-    I64(u64),
-    F32(f32),
-    F64(f64),
-    V128(u128),
-}
-
-impl Value {
-    fn default(value_type: ValueType) -> Self {
-        match value_type {
-            ValueType::I32 => Value::I32(0),
-            ValueType::I64 => Value::I64(0),
-            ValueType::F32 => Value::F32(0.0),
-            ValueType::F64 => Value::F64(0.0),
-            ValueType::V128 => Value::V128(0),
-        }
-    }
-
-    fn value_type(&self) -> ValueType {
-        match self {
-            Value::I32(_) => ValueType::I32,
-            Value::I64(_) => ValueType::I64,
-            Value::F32(_) => ValueType::F32,
-            Value::F64(_) => ValueType::F64,
-            Value::V128(_) => ValueType::V128,
-        }
-    }
-
-    fn value_as_any(&self) -> &Any {
-        match self {
-            Value::I32(ref val) => val,
-            Value::I64(ref val) => val,
-            Value::F32(ref val) => val,
-            Value::F64(ref val) => val,
-            Value::V128(ref val) => val,
-        }
-    }
-}
-
-trait Num: Copy + Any {
-    fn value_type() -> ValueType;
-}
-impl Num for u32 {
-    fn value_type() -> ValueType {
-        ValueType::I32
-    }
-}
-impl Num for u64 {
-    fn value_type() -> ValueType {
-        ValueType::I64
-    }
-}
-impl Num for f32 {
-    fn value_type() -> ValueType {
-        ValueType::F32
-    }
-}
-impl Num for f64 {
-    fn value_type() -> ValueType {
-        ValueType::F64
-    }
-}
-impl Num for u128 {
-    fn value_type() -> ValueType {
-        ValueType::V128
-    }
-}
 
 #[derive(Default, Clone)]
 struct CodePosition {
@@ -106,6 +36,8 @@ struct FunctionFrame {
     locals: Vec<Value>,
 }
 
+const PAGE_SIZE: usize = 64 * 1024; // 64 KiB
+
 struct Memory {
     data: Vec<u8>,
 }
@@ -122,8 +54,34 @@ pub struct VM {
 }
 
 impl Memory {
-    pub fn new() -> Memory {
+    fn new() -> Memory {
         Memory { data: Vec::new() }
+    }
+
+    pub fn page_count(&self) -> u32 {
+        (self.data.len() / PAGE_SIZE) as u32
+    }
+
+    fn grow(&mut self, delta: u32) -> u32 {
+        // TODO: check if maximum reached and fail (return -1)
+        let page_count = self.page_count();
+        self.data.resize((page_count + delta) as usize * PAGE_SIZE, 0);
+        page_count
+    }
+
+    fn load<T: LittleEndianConvert>(&self, address: u32) -> VMResult<T> {
+        // TODO: check memory access
+        let size = core::mem::size_of::<T>();
+        let address = address as usize;
+        Ok(T::from_little_endian(&self.data[address..address + size]))
+    }
+
+    fn store<T: LittleEndianConvert>(&mut self, address: u32, value: T) -> VMResult<()> {
+        // TODO: check memory access
+        let size = core::mem::size_of::<T>();
+        let address = address as usize;
+        value.to_little_endian(&mut self.data[address..address+size]);
+        Ok(())
     }
 }
 
@@ -212,6 +170,50 @@ impl VM {
         }
     }
 
+    fn perform_load<T: Num + LittleEndianConvert>(&mut self, offset: u32) -> VMResult<()> {
+        let address = self.pop_expect::<u32>()? + offset;
+        self.push(self.memory.load::<T>(address)?.to_value());
+        Ok(())
+    }
+
+    fn perform_load_extend<T: LittleEndianConvert, U: Num>(&mut self, offset: u32) -> VMResult<()> 
+        where T: ExtendTo<U> {
+        let address = self.pop_expect::<u32>()? + offset;
+        let val: T = self.memory.load(address)?;
+        let val: U = val.extend_to();
+        self.push(val.to_value());
+        Ok(())
+    }
+
+    fn perform_store<T: Num + LittleEndianConvert>(&mut self, offset: u32) -> VMResult<()> {
+        let value = self.pop_expect::<T>()?;
+        let address = self.pop_expect::<u32>()? + offset;
+        self.memory.store(address, value)?;
+        Ok(())
+    }
+
+    fn perform_store_wrap<T: LittleEndianConvert, U: Num>(&mut self, offset: u32) -> VMResult<()> where U: WrapTo<T> {
+        let value: U = self.pop_expect()?;
+        let value: T = value.wrap_to();
+        let address = self.pop_expect::<u32>()? + offset;
+        self.memory.store(address, value)?;
+        Ok(())
+    }
+
+    fn unop<T: Num, R: Num, F: Fn(T) -> R>(&mut self, fun: F) -> VMResult<()> {
+        let val: T = self.pop_expect()?;
+        self.push(fun(val).to_value());
+        Ok(())
+    }
+
+    fn binop<T: Num, R: Num, F: Fn(T, T) -> R>(&mut self, fun: F) -> VMResult<()> {
+        let b: T = self.pop_expect()?;
+        let a: T = self.pop_expect()?;
+        self.push(fun(a, b).to_value());
+        Ok(())
+    }
+
+    #[allow(clippy::float_cmp)]
     pub fn execute_step(&mut self) -> VMResult<()> {
         let func = self.curr_func();
         let instr = func.code().elements()[self.ip.instr_index].clone();
@@ -307,141 +309,148 @@ impl VM {
 
             // All store/load instructions operate with 'memory immediates'
             // which represented here as (flag, offset) tuple
-            Instruction::I32Load(flag, offset) => (),
-            Instruction::I64Load(flag, offset) => (),
-            Instruction::F32Load(flag, offset) => (),
-            Instruction::F64Load(flag, offset) => (),
-            Instruction::I32Load8S(flag, offset) => (),
-            Instruction::I32Load8U(flag, offset) => (),
-            Instruction::I32Load16S(flag, offset) => (),
-            Instruction::I32Load16U(flag, offset) => (),
-            Instruction::I64Load8S(flag, offset) => (),
-            Instruction::I64Load8U(flag, offset) => (),
-            Instruction::I64Load16S(flag, offset) => (),
-            Instruction::I64Load16U(flag, offset) => (),
-            Instruction::I64Load32S(flag, offset) => (),
-            Instruction::I64Load32U(flag, offset) => (),
-            Instruction::I32Store(flag, offset) => (),
-            Instruction::I64Store(flag, offset) => (),
-            Instruction::F32Store(flag, offset) => (),
-            Instruction::F64Store(flag, offset) => (),
-            Instruction::I32Store8(flag, offset) => (),
-            Instruction::I32Store16(flag, offset) => (),
-            Instruction::I64Store8(flag, offset) => (),
-            Instruction::I64Store16(flag, offset) => (),
-            Instruction::I64Store32(flag, offset) => (),
+            Instruction::I32Load(_flag, offset) => self.perform_load::<u32>(offset)?,
+            Instruction::I64Load(_flag, offset) => self.perform_load::<u64>(offset)?,
+            Instruction::F32Load(_flag, offset) => self.perform_load::<f32>(offset)?,
+            Instruction::F64Load(_flag, offset) => self.perform_load::<f64>(offset)?,
+            Instruction::I32Load8S(_flag, offset) => self.perform_load_extend::<i8, u32>(offset)?,
+            Instruction::I32Load8U(_flag, offset) => self.perform_load_extend::<u8, u32>(offset)?,
+            Instruction::I32Load16S(_flag, offset) => self.perform_load_extend::<i16, u32>(offset)?,
+            Instruction::I32Load16U(_flag, offset) => self.perform_load_extend::<u16, u32>(offset)?,
+            Instruction::I64Load8S(_flag, offset) => self.perform_load_extend::<i8, u64>(offset)?,
+            Instruction::I64Load8U(_flag, offset) => self.perform_load_extend::<u8, u64>(offset)?,
+            Instruction::I64Load16S(_flag, offset) => self.perform_load_extend::<i16, u64>(offset)?,
+            Instruction::I64Load16U(_flag, offset) => self.perform_load_extend::<u16, u64>(offset)?,
+            Instruction::I64Load32S(_flag, offset) => self.perform_load_extend::<i32, u64>(offset)?,
+            Instruction::I64Load32U(_flag, offset) => self.perform_load_extend::<u32, u64>(offset)?,
 
-            Instruction::CurrentMemory(_) => (),
-            Instruction::GrowMemory(_) => (),
+            Instruction::I32Store(_flag, offset) => self.perform_store::<u32>(offset)?,
+            Instruction::I64Store(_flag, offset) => self.perform_store::<u64>(offset)?,
+            Instruction::F32Store(_flag, offset) => self.perform_store::<f32>(offset)?,
+            Instruction::F64Store(_flag, offset) => self.perform_store::<f64>(offset)?,
+            Instruction::I32Store8(_flag, offset) => self.perform_store_wrap::<u8, u32>(offset)?,
+            Instruction::I32Store16(_flag, offset) => self.perform_store_wrap::<u16, u32>(offset)?,
+            Instruction::I64Store8(_flag, offset) => self.perform_store_wrap::<u8, u64>(offset)?,
+            Instruction::I64Store16(_flag, offset) => self.perform_store_wrap::<u16, u64>(offset)?,
+            Instruction::I64Store32(_flag, offset) => self.perform_store_wrap::<u32, u64>(offset)?,
+
+            Instruction::CurrentMemory(_) => self.push(Value::I32(self.memory.page_count())),
+            Instruction::GrowMemory(_) => {
+                let delta = self.pop_expect::<u32>()?;
+                let result = self.memory.grow(delta);
+                self.push(Value::I32(result));
+            },
 
             Instruction::I32Const(val) => self.push(Value::I32(val as u32)),
             Instruction::I64Const(val) => self.push(Value::I64(val as u64)),
             Instruction::F32Const(val) => self.push(Value::F32(f32::from_bits(val))),
             Instruction::F64Const(val) => self.push(Value::F64(f64::from_bits(val))),
 
-            Instruction::I32Eqz => (),
-            Instruction::I32Eq => (),
-            Instruction::I32Ne => (),
-            Instruction::I32LtS => (),
-            Instruction::I32LtU => (),
-            Instruction::I32GtS => (),
-            Instruction::I32GtU => (),
-            Instruction::I32LeS => (),
-            Instruction::I32LeU => (),
-            Instruction::I32GeS => (),
-            Instruction::I32GeU => (),
+            Instruction::I32Eqz => self.unop(|x: u32| bool_val(x == 0))?,
+            Instruction::I32Eq => self.binop(|a: u32, b: u32| bool_val(a == b))?,
+            Instruction::I32Ne => self.binop(|a: u32, b: u32| bool_val(a != b))?,
+            Instruction::I32LtS => self.binop(|a: u32, b: u32| bool_val(a as i32 == b as i32))?,
+            Instruction::I32LtU => self.binop(|a: u32, b: u32| bool_val(a == b))?,
+            Instruction::I32GtS => self.binop(|a: u32, b: u32| bool_val(a as i32 > b as i32))?,
+            Instruction::I32GtU => self.binop(|a: u32, b: u32| bool_val(a > b))?,
+            Instruction::I32LeS => self.binop(|a: u32, b: u32| bool_val(a as i32 <= b as i32))?,
+            Instruction::I32LeU => self.binop(|a: u32, b: u32| bool_val(a <= b))?,
+            Instruction::I32GeS => self.binop(|a: u32, b: u32| bool_val(a as i32>= b as i32))?,
+            Instruction::I32GeU => self.binop(|a: u32, b: u32| bool_val(a >= b))?,
 
-            Instruction::I64Eqz => (),
-            Instruction::I64Eq => (),
-            Instruction::I64Ne => (),
-            Instruction::I64LtS => (),
-            Instruction::I64LtU => (),
-            Instruction::I64GtS => (),
-            Instruction::I64GtU => (),
-            Instruction::I64LeS => (),
-            Instruction::I64LeU => (),
-            Instruction::I64GeS => (),
-            Instruction::I64GeU => (),
+            Instruction::I64Eqz => self.unop(|x: u64| bool_val(x == 0))?,
+            Instruction::I64Eq => self.binop(|a: u64, b: u64| bool_val(a == b))?,
+            Instruction::I64Ne => self.binop(|a: u64, b: u64| bool_val(a != b))?,
+            Instruction::I64LtS => self.binop(|a: u64, b: u64| bool_val(a as i64 == b as i64))?,
+            Instruction::I64LtU => self.binop(|a: u64, b: u64| bool_val(a == b))?,
+            Instruction::I64GtS => self.binop(|a: u64, b: u64| bool_val(a as i64 > b as i64))?,
+            Instruction::I64GtU => self.binop(|a: u64, b: u64| bool_val(a > b))?,
+            Instruction::I64LeS => self.binop(|a: u64, b: u64| bool_val(a as i64 <= b as i64))?,
+            Instruction::I64LeU => self.binop(|a: u64, b: u64| bool_val(a <= b))?,
+            Instruction::I64GeS => self.binop(|a: u64, b: u64| bool_val(a as i64>= b as i64))?,
+            Instruction::I64GeU => self.binop(|a: u64, b: u64| bool_val(a >= b))?,
 
-            Instruction::F32Eq => (),
-            Instruction::F32Ne => (),
-            Instruction::F32Lt => (),
-            Instruction::F32Gt => (),
-            Instruction::F32Le => (),
-            Instruction::F32Ge => (),
+            Instruction::F32Eq => self.binop(|a: f32, b: f32| bool_val(a == b))?,
+            Instruction::F32Ne => self.binop(|a: f32, b: f32| bool_val(a != b))?,
+            Instruction::F32Lt => self.binop(|a: f32, b: f32| bool_val(a < b))?,
+            Instruction::F32Gt => self.binop(|a: f32, b: f32| bool_val(a > b))?,
+            Instruction::F32Le => self.binop(|a: f32, b: f32| bool_val(a <= b))?,
+            Instruction::F32Ge => self.binop(|a: f32, b: f32| bool_val(a >= b))?,
 
-            Instruction::F64Eq => (),
-            Instruction::F64Ne => (),
-            Instruction::F64Lt => (),
-            Instruction::F64Gt => (),
-            Instruction::F64Le => (),
-            Instruction::F64Ge => (),
+            Instruction::F64Eq => self.binop(|a: f64, b: f64| bool_val(a == b))?,
+            Instruction::F64Ne => self.binop(|a: f64, b: f64| bool_val(a != b))?,
+            Instruction::F64Lt => self.binop(|a: f64, b: f64| bool_val(a < b))?,
+            Instruction::F64Gt => self.binop(|a: f64, b: f64| bool_val(a > b))?,
+            Instruction::F64Le => self.binop(|a: f64, b: f64| bool_val(a <= b))?,
+            Instruction::F64Ge => self.binop(|a: f64, b: f64| bool_val(a >= b))?,
 
             Instruction::I32Clz => (),
             Instruction::I32Ctz => (),
             Instruction::I32Popcnt => (),
-            Instruction::I32Add => (),
-            Instruction::I32Sub => (),
-            Instruction::I32Mul => (),
+            Instruction::I32Add => self.binop(|a: u32, b: u32| a + b)?,
+            Instruction::I32Sub => self.binop(|a: u32, b: u32| a - b)?,
+            Instruction::I32Mul => self.binop(|a: u32, b: u32| a * b)?,
             Instruction::I32DivS => (),
             Instruction::I32DivU => (),
             Instruction::I32RemS => (),
             Instruction::I32RemU => (),
-            Instruction::I32And => (),
-            Instruction::I32Or => (),
-            Instruction::I32Xor => (),
-            Instruction::I32Shl => (),
-            Instruction::I32ShrS => (),
-            Instruction::I32ShrU => (),
-            Instruction::I32Rotl => (),
-            Instruction::I32Rotr => (),
+            Instruction::I32And => self.binop(|a: u32, b: u32| a & b)?,
+            Instruction::I32Or => self.binop(|a: u32, b: u32| a | b)?,
+            Instruction::I32Xor => self.binop(|a: u32, b: u32| a ^ b)?,
+            Instruction::I32Shl => self.binop(|a: u32, b: u32| a << b)?,
+            Instruction::I32ShrS => self.binop(|a: u32, b: u32| (a as i32 >> b) as u32)?,
+            Instruction::I32ShrU => self.binop(|a: u32, b: u32| a >> b)?,
+            Instruction::I32Rotl => self.binop(|a: u32, b: u32| a.rotate_left(b))?,
+            Instruction::I32Rotr => self.binop(|a: u32, b: u32| a.rotate_right(b))?,
 
             Instruction::I64Clz => (),
             Instruction::I64Ctz => (),
             Instruction::I64Popcnt => (),
-            Instruction::I64Add => (),
-            Instruction::I64Sub => (),
-            Instruction::I64Mul => (),
+            Instruction::I64Add => self.binop(|a: u64, b: u64| a + b)?,
+            Instruction::I64Sub => self.binop(|a: u64, b: u64| a - b)?,
+            Instruction::I64Mul => self.binop(|a: u64, b: u64| a * b)?,
             Instruction::I64DivS => (),
             Instruction::I64DivU => (),
             Instruction::I64RemS => (),
             Instruction::I64RemU => (),
-            Instruction::I64And => (),
-            Instruction::I64Or => (),
-            Instruction::I64Xor => (),
-            Instruction::I64Shl => (),
-            Instruction::I64ShrS => (),
-            Instruction::I64ShrU => (),
-            Instruction::I64Rotl => (),
-            Instruction::I64Rotr => (),
-            Instruction::F32Abs => (),
-            Instruction::F32Neg => (),
-            Instruction::F32Ceil => (),
-            Instruction::F32Floor => (),
-            Instruction::F32Trunc => (),
+            Instruction::I64And => self.binop(|a: u64, b: u64| a & b)?,
+            Instruction::I64Or => self.binop(|a: u64, b: u64| a | b)?,
+            Instruction::I64Xor => self.binop(|a: u64, b: u64| a ^ b)?,
+            Instruction::I64Shl => self.binop(|a: u64, b: u64| a << b)?,
+            Instruction::I64ShrS => self.binop(|a: u64, b: u64| (a as i64 >> b) as u64)?,
+            Instruction::I64ShrU => self.binop(|a: u64, b: u64| a >> b)?,
+            Instruction::I64Rotl => self.binop(|a: u64, b: u64| a.rotate_left(b as u32))?,
+            Instruction::I64Rotr => self.binop(|a: u64, b: u64| a.rotate_right(b as u32))?,
+
+            Instruction::F32Abs => self.unop(|x: f32| x.abs())?,
+            Instruction::F32Neg => self.unop(|x: f32| -x)?,
+            Instruction::F32Ceil => self.unop(|x: f32| x.ceil())?,
+            Instruction::F32Floor => self.unop(|x: f32| x.floor())?,
+            Instruction::F32Trunc => self.unop(|x: f32| x.trunc())?,
             Instruction::F32Nearest => (),
-            Instruction::F32Sqrt => (),
-            Instruction::F32Add => (),
-            Instruction::F32Sub => (),
-            Instruction::F32Mul => (),
-            Instruction::F32Div => (),
-            Instruction::F32Min => (),
-            Instruction::F32Max => (),
-            Instruction::F32Copysign => (),
-            Instruction::F64Abs => (),
-            Instruction::F64Neg => (),
-            Instruction::F64Ceil => (),
-            Instruction::F64Floor => (),
-            Instruction::F64Trunc => (),
+            Instruction::F32Sqrt => self.unop(|x: f32| x.sqrt())?,
+            Instruction::F32Add => self.binop(|a: f32, b: f32| a + b)?,
+            Instruction::F32Sub => self.binop(|a: f32, b: f32| a - b)?,
+            Instruction::F32Mul => self.binop(|a: f32, b: f32| a * b)?,
+            Instruction::F32Div => self.binop(|a: f32, b: f32| a / b)?,
+            Instruction::F32Min => self.binop(|a: f32, b: f32| a.min(b))?,
+            Instruction::F32Max => self.binop(|a: f32, b: f32| a.max(b))?,
+            Instruction::F32Copysign => self.binop(|a: f32, b: f32| a.copysign(b))?,
+
+            Instruction::F64Abs => self.unop(|x: f64| x.abs())?,
+            Instruction::F64Neg => self.unop(|x: f64| -x)?,
+            Instruction::F64Ceil => self.unop(|x: f64| x.ceil())?,
+            Instruction::F64Floor => self.unop(|x: f64| x.floor())?,
+            Instruction::F64Trunc => self.unop(|x: f64| x.trunc())?,
             Instruction::F64Nearest => (),
-            Instruction::F64Sqrt => (),
-            Instruction::F64Add => (),
-            Instruction::F64Sub => (),
-            Instruction::F64Mul => (),
-            Instruction::F64Div => (),
-            Instruction::F64Min => (),
-            Instruction::F64Max => (),
-            Instruction::F64Copysign => (),
+            Instruction::F64Sqrt => self.unop(|x: f64| x.sqrt())?,
+            Instruction::F64Add => self.binop(|a: f64, b: f64| a + b)?,
+            Instruction::F64Sub => self.binop(|a: f64, b: f64| a - b)?,
+            Instruction::F64Mul => self.binop(|a: f64, b: f64| a * b)?,
+            Instruction::F64Div => self.binop(|a: f64, b: f64| a / b)?,
+            Instruction::F64Min => self.binop(|a: f64, b: f64| a.min(b))?,
+            Instruction::F64Max => self.binop(|a: f64, b: f64| a.max(b))?,
+            Instruction::F64Copysign => self.binop(|a: f64, b: f64| a.copysign(b))?,
 
             Instruction::I32WrapI64 => (),
             Instruction::I32TruncSF32 => (),
@@ -487,5 +496,12 @@ impl VM {
         } else {
             Ok(())
         }
+    }
+}
+
+fn bool_val(val: bool) -> u32 {
+    match val {
+        true => 1,
+        false => 0,
     }
 }

@@ -4,6 +4,7 @@ use parity_wasm::{elements::Module, SerializationError};
 use std::path::Path;
 
 pub mod vm;
+pub mod value;
 use vm::VM;
 
 
