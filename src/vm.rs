@@ -341,17 +341,16 @@ impl VM {
     }
 
     pub fn execute_step(&mut self) -> VMResult<()> {
-        if let Err(trap) = self.execute_step_internal() {
-            if self.trap.is_none() {
-                self.trap = Some(trap);
-            }
+        if let Some(trap) = &self.trap {
+            return Err(trap.to_owned());
         }
 
-        if let Some(trap) = &self.trap {
-            Err(trap.to_owned())
-        } else {
-            Ok(())
+        if let Err(trap) = self.execute_step_internal() {
+            self.trap = Some(trap.clone());
+            return Err(trap);
         }
+
+        Ok(())
     }
 
     #[allow(clippy::float_cmp)]
