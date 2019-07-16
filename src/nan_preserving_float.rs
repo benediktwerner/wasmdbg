@@ -195,7 +195,7 @@ macro_rules! float {
 
         impl Default for $for {
             fn default() -> Self {
-                Self::from(0.0)
+                Self::from_bits(0)
             }
         }
     };
