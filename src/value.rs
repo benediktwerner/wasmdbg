@@ -1,13 +1,15 @@
 use std::any::Any;
 
 use parity_wasm::elements::ValueType;
+use crate::nan_preserving_float::{F32, F64};
+
 
 #[derive(Clone)]
 pub enum Value {
     I32(u32),
     I64(u64),
-    F32(f32),
-    F64(f64),
+    F32(F32),
+    F64(F64),
     V128(u128),
 }
 
@@ -16,8 +18,8 @@ impl Value {
         match value_type {
             ValueType::I32 => Value::I32(0),
             ValueType::I64 => Value::I64(0),
-            ValueType::F32 => Value::F32(0.0),
-            ValueType::F64 => Value::F64(0.0),
+            ValueType::F32 => Value::F32(F32::default()),
+            ValueType::F64 => Value::F64(F64::default()),
             ValueType::V128 => Value::V128(0),
         }
     }
@@ -43,55 +45,79 @@ impl Value {
     }
 }
 
-pub trait Num: Copy + Any {
+impl From<u32> for Value {
+    fn from(val: u32) -> Self {
+        Value::I32(val)
+    }
+}
+impl From<u64> for Value {
+    fn from(val: u64) -> Self {
+        Value::I64(val)
+    }
+}
+impl From<f32> for Value {
+    fn from(val: f32) -> Self {
+        Value::F32(F32::from(val))
+    }
+}
+impl From<f64> for Value {
+    fn from(val: f64) -> Self {
+        Value::F64(F64::from(val))
+    }
+}
+impl From<F32> for Value {
+    fn from(val: F32) -> Self {
+        Value::F32(val)
+    }
+}
+impl From<F64> for Value {
+    fn from(val: F64) -> Self {
+        Value::F64(val)
+    }
+}
+impl From<u128> for Value {
+    fn from(val: u128) -> Self {
+        Value::V128(val)
+    }
+}
+
+pub trait Number: Into<Value> + Copy + Any {
     fn value_type() -> ValueType;
-    fn to_value(self) -> Value;
 }
-impl Num for u32 {
-    fn value_type() -> ValueType {
-        ValueType::I32
-    }
-    fn to_value(self) -> Value {
-        Value::I32(self)
-    }
+
+macro_rules! impl_number {
+    ($num_t:ident, $value_t:ident) => {
+        impl Number for $num_t {
+            fn value_type() -> ValueType {
+                ValueType::$value_t
+            }
+        }
+    };
 }
-impl Num for u64 {
-    fn value_type() -> ValueType {
-        ValueType::I64
-    }
-    fn to_value(self) -> Value {
-        Value::I64(self)
-    }
-}
-impl Num for f32 {
-    fn value_type() -> ValueType {
-        ValueType::F32
-    }
-    fn to_value(self) -> Value {
-        Value::F32(self)
-    }
-}
-impl Num for f64 {
-    fn value_type() -> ValueType {
-        ValueType::F64
-    }
-    fn to_value(self) -> Value {
-        Value::F64(self)
-    }
-}
-impl Num for u128 {
-    fn value_type() -> ValueType {
-        ValueType::V128
-    }
-    fn to_value(self) -> Value {
-        Value::V128(self)
-    }
+
+impl_number!(u32, I32);
+impl_number!(u64, I64);
+impl_number!(f32, F32);
+impl_number!(f64, F64);
+impl_number!(F32, F32);
+impl_number!(F64, F64);
+impl_number!(u128, V128);
+
+
+pub trait Integer<T> {
+    fn leading_zeros(self) -> T;
+    fn trailing_zeros(self) -> T;
+    fn count_ones(self) -> T;
+    fn rotl(self, other: T) -> T;
+    fn rotr(self, other: T) -> T;
+    fn rem(self, other: T) -> T;
 }
 
 pub trait LittleEndianConvert: Sized {
     fn from_little_endian(buffer: &[u8]) -> Self;
     fn to_little_endian(self, buffer: &mut [u8]);
 }
+
 impl LittleEndianConvert for i8 {
     fn from_little_endian(buffer: &[u8]) -> Self {
         buffer[0] as i8
@@ -101,6 +127,7 @@ impl LittleEndianConvert for i8 {
         buffer[0] = self as u8;
     }
 }
+
 impl LittleEndianConvert for u8 {
     fn from_little_endian(buffer: &[u8]) -> Self {
         buffer[0]
@@ -110,30 +137,8 @@ impl LittleEndianConvert for u8 {
         buffer[0] = self;
     }
 }
-impl LittleEndianConvert for f32 {
-    fn from_little_endian(buffer: &[u8]) -> Self {
-        let mut buf = [0u8; 4];
-        buf.copy_from_slice(&buffer[0..4]);
-        Self::from_bits(u32::from_le_bytes(buf))
-    }
 
-    fn to_little_endian(self, buffer: &mut [u8]) {
-        buffer.copy_from_slice(&self.to_bits().to_le_bytes());
-    }
-}
-impl LittleEndianConvert for f64 {
-    fn from_little_endian(buffer: &[u8]) -> Self {
-        let mut buf = [0u8; 8];
-        buf.copy_from_slice(&buffer[0..8]);
-        Self::from_bits(u64::from_le_bytes(buf))
-    }
-
-    fn to_little_endian(self, buffer: &mut [u8]) {
-        buffer.copy_from_slice(&self.to_bits().to_le_bytes());
-    }
-}
-
-macro_rules! impl_little_endian_convert {
+macro_rules! impl_little_endian_convert_int {
     ($t:ident) => {
         impl LittleEndianConvert for $t {
             fn from_little_endian(buffer: &[u8]) -> Self {
@@ -150,12 +155,30 @@ macro_rules! impl_little_endian_convert {
     };
 }
 
-impl_little_endian_convert!(i16);
-impl_little_endian_convert!(u16);
-impl_little_endian_convert!(i32);
-impl_little_endian_convert!(u32);
-impl_little_endian_convert!(i64);
-impl_little_endian_convert!(u64);
+macro_rules! impl_little_endian_convert_float {
+    ($t:ident, $repr:ident) => {
+        impl LittleEndianConvert for $t {
+            fn from_little_endian(buffer: &[u8]) -> Self {
+                Self::from_bits($repr::from_little_endian(buffer))
+            }
+
+            fn to_little_endian(self, buffer: &mut [u8]) {
+                self.to_bits().to_little_endian(buffer);
+            }
+        }
+    };
+}
+
+impl_little_endian_convert_int!(i16);
+impl_little_endian_convert_int!(u16);
+impl_little_endian_convert_int!(i32);
+impl_little_endian_convert_int!(u32);
+impl_little_endian_convert_int!(i64);
+impl_little_endian_convert_int!(u64);
+impl_little_endian_convert_float!(f32, u32);
+impl_little_endian_convert_float!(f64, u64);
+impl_little_endian_convert_float!(F32, u32);
+impl_little_endian_convert_float!(F64, u64);
 
 
 pub trait ExtendTo<T> {
@@ -182,7 +205,7 @@ impl_extend_to!(i16, u64);
 impl_extend_to!(u16, u64);
 impl_extend_to!(i32, u64);
 impl_extend_to!(u32, u64);
-impl_extend_to!(f32, f64);
+
 
 pub trait WrapTo<T> {
     fn wrap_to(self) -> T;

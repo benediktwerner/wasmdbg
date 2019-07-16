@@ -1,7 +1,8 @@
 extern crate parity_wasm;
 
 use parity_wasm::elements::{FuncBody, Instruction, Module, Type::Function, ValueType};
-use crate::value::{Value, Num, LittleEndianConvert, ExtendTo, WrapTo};
+use crate::value::{Value, Number, LittleEndianConvert, ExtendTo, WrapTo};
+use crate::nan_preserving_float::{F32, F64};
 
 
 #[derive(Clone)]
@@ -123,7 +124,7 @@ impl VM {
         self.value_stack.pop().ok_or(Trap::PopFromEmptyStack)
     }
 
-    fn pop_expect<T: Num>(&mut self) -> VMResult<T> {
+    fn pop_expect<T: Number>(&mut self) -> VMResult<T> {
         if let Some(val) = self.value_stack.pop() {
             if let Some(val) = val.value_as_any().downcast_ref::<T>() {
                 Ok(*val)
@@ -170,29 +171,29 @@ impl VM {
         }
     }
 
-    fn perform_load<T: Num + LittleEndianConvert>(&mut self, offset: u32) -> VMResult<()> {
+    fn perform_load<T: Number + LittleEndianConvert>(&mut self, offset: u32) -> VMResult<()> {
         let address = self.pop_expect::<u32>()? + offset;
-        self.push(self.memory.load::<T>(address)?.to_value());
+        self.push(self.memory.load::<T>(address)?.into());
         Ok(())
     }
 
-    fn perform_load_extend<T: LittleEndianConvert, U: Num>(&mut self, offset: u32) -> VMResult<()> 
+    fn perform_load_extend<T: LittleEndianConvert, U: Number>(&mut self, offset: u32) -> VMResult<()> 
         where T: ExtendTo<U> {
         let address = self.pop_expect::<u32>()? + offset;
         let val: T = self.memory.load(address)?;
         let val: U = val.extend_to();
-        self.push(val.to_value());
+        self.push(val.into());
         Ok(())
     }
 
-    fn perform_store<T: Num + LittleEndianConvert>(&mut self, offset: u32) -> VMResult<()> {
+    fn perform_store<T: Number + LittleEndianConvert>(&mut self, offset: u32) -> VMResult<()> {
         let value = self.pop_expect::<T>()?;
         let address = self.pop_expect::<u32>()? + offset;
         self.memory.store(address, value)?;
         Ok(())
     }
 
-    fn perform_store_wrap<T: LittleEndianConvert, U: Num>(&mut self, offset: u32) -> VMResult<()> where U: WrapTo<T> {
+    fn perform_store_wrap<T: LittleEndianConvert, U: Number>(&mut self, offset: u32) -> VMResult<()> where U: WrapTo<T> {
         let value: U = self.pop_expect()?;
         let value: T = value.wrap_to();
         let address = self.pop_expect::<u32>()? + offset;
@@ -200,16 +201,16 @@ impl VM {
         Ok(())
     }
 
-    fn unop<T: Num, R: Num, F: Fn(T) -> R>(&mut self, fun: F) -> VMResult<()> {
+    fn unop<T: Number, R: Number, F: Fn(T) -> R>(&mut self, fun: F) -> VMResult<()> {
         let val: T = self.pop_expect()?;
-        self.push(fun(val).to_value());
+        self.push(fun(val).into());
         Ok(())
     }
 
-    fn binop<T: Num, R: Num, F: Fn(T, T) -> R>(&mut self, fun: F) -> VMResult<()> {
+    fn binop<T: Number, R: Number, F: Fn(T, T) -> R>(&mut self, fun: F) -> VMResult<()> {
         let b: T = self.pop_expect()?;
         let a: T = self.pop_expect()?;
-        self.push(fun(a, b).to_value());
+        self.push(fun(a, b).into());
         Ok(())
     }
 
@@ -311,8 +312,8 @@ impl VM {
             // which represented here as (flag, offset) tuple
             Instruction::I32Load(_flag, offset) => self.perform_load::<u32>(offset)?,
             Instruction::I64Load(_flag, offset) => self.perform_load::<u64>(offset)?,
-            Instruction::F32Load(_flag, offset) => self.perform_load::<f32>(offset)?,
-            Instruction::F64Load(_flag, offset) => self.perform_load::<f64>(offset)?,
+            Instruction::F32Load(_flag, offset) => self.perform_load::<F32>(offset)?,
+            Instruction::F64Load(_flag, offset) => self.perform_load::<F64>(offset)?,
             Instruction::I32Load8S(_flag, offset) => self.perform_load_extend::<i8, u32>(offset)?,
             Instruction::I32Load8U(_flag, offset) => self.perform_load_extend::<u8, u32>(offset)?,
             Instruction::I32Load16S(_flag, offset) => self.perform_load_extend::<i16, u32>(offset)?,
@@ -326,8 +327,8 @@ impl VM {
 
             Instruction::I32Store(_flag, offset) => self.perform_store::<u32>(offset)?,
             Instruction::I64Store(_flag, offset) => self.perform_store::<u64>(offset)?,
-            Instruction::F32Store(_flag, offset) => self.perform_store::<f32>(offset)?,
-            Instruction::F64Store(_flag, offset) => self.perform_store::<f64>(offset)?,
+            Instruction::F32Store(_flag, offset) => self.perform_store::<F32>(offset)?,
+            Instruction::F64Store(_flag, offset) => self.perform_store::<F64>(offset)?,
             Instruction::I32Store8(_flag, offset) => self.perform_store_wrap::<u8, u32>(offset)?,
             Instruction::I32Store16(_flag, offset) => self.perform_store_wrap::<u16, u32>(offset)?,
             Instruction::I64Store8(_flag, offset) => self.perform_store_wrap::<u8, u64>(offset)?,
@@ -343,8 +344,8 @@ impl VM {
 
             Instruction::I32Const(val) => self.push(Value::I32(val as u32)),
             Instruction::I64Const(val) => self.push(Value::I64(val as u64)),
-            Instruction::F32Const(val) => self.push(Value::F32(f32::from_bits(val))),
-            Instruction::F64Const(val) => self.push(Value::F64(f64::from_bits(val))),
+            Instruction::F32Const(val) => self.push(Value::F32(F32::from_bits(val))),
+            Instruction::F64Const(val) => self.push(Value::F64(F64::from_bits(val))),
 
             Instruction::I32Eqz => self.unop(|x: u32| bool_val(x == 0))?,
             Instruction::I32Eq => self.binop(|a: u32, b: u32| bool_val(a == b))?,
@@ -370,19 +371,19 @@ impl VM {
             Instruction::I64GeS => self.binop(|a: u64, b: u64| bool_val(a as i64>= b as i64))?,
             Instruction::I64GeU => self.binop(|a: u64, b: u64| bool_val(a >= b))?,
 
-            Instruction::F32Eq => self.binop(|a: f32, b: f32| bool_val(a == b))?,
-            Instruction::F32Ne => self.binop(|a: f32, b: f32| bool_val(a != b))?,
-            Instruction::F32Lt => self.binop(|a: f32, b: f32| bool_val(a < b))?,
-            Instruction::F32Gt => self.binop(|a: f32, b: f32| bool_val(a > b))?,
-            Instruction::F32Le => self.binop(|a: f32, b: f32| bool_val(a <= b))?,
-            Instruction::F32Ge => self.binop(|a: f32, b: f32| bool_val(a >= b))?,
+            Instruction::F32Eq => self.binop(|a: F32, b: F32| bool_val(a == b))?,
+            Instruction::F32Ne => self.binop(|a: F32, b: F32| bool_val(a != b))?,
+            Instruction::F32Lt => self.binop(|a: F32, b: F32| bool_val(a < b))?,
+            Instruction::F32Gt => self.binop(|a: F32, b: F32| bool_val(a > b))?,
+            Instruction::F32Le => self.binop(|a: F32, b: F32| bool_val(a <= b))?,
+            Instruction::F32Ge => self.binop(|a: F32, b: F32| bool_val(a >= b))?,
 
-            Instruction::F64Eq => self.binop(|a: f64, b: f64| bool_val(a == b))?,
-            Instruction::F64Ne => self.binop(|a: f64, b: f64| bool_val(a != b))?,
-            Instruction::F64Lt => self.binop(|a: f64, b: f64| bool_val(a < b))?,
-            Instruction::F64Gt => self.binop(|a: f64, b: f64| bool_val(a > b))?,
-            Instruction::F64Le => self.binop(|a: f64, b: f64| bool_val(a <= b))?,
-            Instruction::F64Ge => self.binop(|a: f64, b: f64| bool_val(a >= b))?,
+            Instruction::F64Eq => self.binop(|a: F64, b: F64| bool_val(a == b))?,
+            Instruction::F64Ne => self.binop(|a: F64, b: F64| bool_val(a != b))?,
+            Instruction::F64Lt => self.binop(|a: F64, b: F64| bool_val(a < b))?,
+            Instruction::F64Gt => self.binop(|a: F64, b: F64| bool_val(a > b))?,
+            Instruction::F64Le => self.binop(|a: F64, b: F64| bool_val(a <= b))?,
+            Instruction::F64Ge => self.binop(|a: F64, b: F64| bool_val(a >= b))?,
 
             Instruction::I32Clz => (),
             Instruction::I32Ctz => (),
@@ -422,35 +423,35 @@ impl VM {
             Instruction::I64Rotl => self.binop(|a: u64, b: u64| a.rotate_left(b as u32))?,
             Instruction::I64Rotr => self.binop(|a: u64, b: u64| a.rotate_right(b as u32))?,
 
-            Instruction::F32Abs => self.unop(|x: f32| x.abs())?,
-            Instruction::F32Neg => self.unop(|x: f32| -x)?,
-            Instruction::F32Ceil => self.unop(|x: f32| x.ceil())?,
-            Instruction::F32Floor => self.unop(|x: f32| x.floor())?,
-            Instruction::F32Trunc => self.unop(|x: f32| x.trunc())?,
-            Instruction::F32Nearest => (),
-            Instruction::F32Sqrt => self.unop(|x: f32| x.sqrt())?,
-            Instruction::F32Add => self.binop(|a: f32, b: f32| a + b)?,
-            Instruction::F32Sub => self.binop(|a: f32, b: f32| a - b)?,
-            Instruction::F32Mul => self.binop(|a: f32, b: f32| a * b)?,
-            Instruction::F32Div => self.binop(|a: f32, b: f32| a / b)?,
-            Instruction::F32Min => self.binop(|a: f32, b: f32| a.min(b))?,
-            Instruction::F32Max => self.binop(|a: f32, b: f32| a.max(b))?,
-            Instruction::F32Copysign => self.binop(|a: f32, b: f32| a.copysign(b))?,
+            Instruction::F32Abs => self.unop(|x: F32| x.abs())?,
+            Instruction::F32Neg => self.unop(|x: F32| -x)?,
+            Instruction::F32Ceil => self.unop(|x: F32| x.ceil())?,
+            Instruction::F32Floor => self.unop(|x: F32| x.floor())?,
+            Instruction::F32Trunc => self.unop(|x: F32| x.trunc())?,
+            Instruction::F32Nearest => self.unop(|x: F32| x.nearest())?,
+            Instruction::F32Sqrt => self.unop(|x: F32| x.sqrt())?,
+            Instruction::F32Add => self.binop(|a: F32, b: F32| a + b)?,
+            Instruction::F32Sub => self.binop(|a: F32, b: F32| a - b)?,
+            Instruction::F32Mul => self.binop(|a: F32, b: F32| a * b)?,
+            Instruction::F32Div => self.binop(|a: F32, b: F32| a / b)?,
+            Instruction::F32Min => self.binop(|a: F32, b: F32| a.min(b))?,
+            Instruction::F32Max => self.binop(|a: F32, b: F32| a.max(b))?,
+            Instruction::F32Copysign => self.binop(|a: F32, b: F32| a.copysign(b))?,
 
-            Instruction::F64Abs => self.unop(|x: f64| x.abs())?,
-            Instruction::F64Neg => self.unop(|x: f64| -x)?,
-            Instruction::F64Ceil => self.unop(|x: f64| x.ceil())?,
-            Instruction::F64Floor => self.unop(|x: f64| x.floor())?,
-            Instruction::F64Trunc => self.unop(|x: f64| x.trunc())?,
-            Instruction::F64Nearest => (),
-            Instruction::F64Sqrt => self.unop(|x: f64| x.sqrt())?,
-            Instruction::F64Add => self.binop(|a: f64, b: f64| a + b)?,
-            Instruction::F64Sub => self.binop(|a: f64, b: f64| a - b)?,
-            Instruction::F64Mul => self.binop(|a: f64, b: f64| a * b)?,
-            Instruction::F64Div => self.binop(|a: f64, b: f64| a / b)?,
-            Instruction::F64Min => self.binop(|a: f64, b: f64| a.min(b))?,
-            Instruction::F64Max => self.binop(|a: f64, b: f64| a.max(b))?,
-            Instruction::F64Copysign => self.binop(|a: f64, b: f64| a.copysign(b))?,
+            Instruction::F64Abs => self.unop(|x: F64| x.abs())?,
+            Instruction::F64Neg => self.unop(|x: F64| -x)?,
+            Instruction::F64Ceil => self.unop(|x: F64| x.ceil())?,
+            Instruction::F64Floor => self.unop(|x: F64| x.floor())?,
+            Instruction::F64Trunc => self.unop(|x: F64| x.trunc())?,
+            Instruction::F64Nearest => self.unop(|x: F64| x.nearest())?,
+            Instruction::F64Sqrt => self.unop(|x: F64| x.sqrt())?,
+            Instruction::F64Add => self.binop(|a: F64, b: F64| a + b)?,
+            Instruction::F64Sub => self.binop(|a: F64, b: F64| a - b)?,
+            Instruction::F64Mul => self.binop(|a: F64, b: F64| a * b)?,
+            Instruction::F64Div => self.binop(|a: F64, b: F64| a / b)?,
+            Instruction::F64Min => self.binop(|a: F64, b: F64| a.min(b))?,
+            Instruction::F64Max => self.binop(|a: F64, b: F64| a.max(b))?,
+            Instruction::F64Copysign => self.binop(|a: F64, b: F64| a.copysign(b))?,
 
             Instruction::I32WrapI64 => (),
             Instruction::I32TruncSF32 => (),

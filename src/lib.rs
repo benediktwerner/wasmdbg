@@ -5,6 +5,7 @@ use std::path::Path;
 
 pub mod vm;
 pub mod value;
+pub mod nan_preserving_float;
 use vm::VM;
 
 
