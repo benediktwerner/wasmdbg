@@ -2,6 +2,7 @@ use std::any::Any;
 
 use parity_wasm::elements::ValueType;
 use crate::nan_preserving_float::{F32, F64};
+use crate::vm::{Trap, VMResult};
 
 
 #[derive(Clone)]
@@ -110,8 +111,56 @@ pub trait Integer<T> {
     fn count_ones(self) -> T;
     fn rotl(self, other: T) -> T;
     fn rotr(self, other: T) -> T;
-    fn rem(self, other: T) -> T;
+    fn rem(self, other: T) -> VMResult<T>;
+    fn div(self, other: T) -> VMResult<T>;
 }
+
+macro_rules! impl_integer {
+    ($type:ident) => {
+        #[allow(clippy::cast_lossless)]
+        impl Integer<$type> for $type {
+            fn leading_zeros(self) -> $type {
+                self.leading_zeros() as $type
+            }
+            fn trailing_zeros(self) -> $type {
+                self.trailing_zeros() as $type
+            }
+            fn count_ones(self) -> $type {
+                self.count_ones() as $type
+            }
+            fn rotl(self, other: $type) -> $type {
+                self.rotate_left(other as u32)
+            }
+            fn rotr(self, other: $type) -> $type {
+                self.rotate_right(other as u32)
+            }
+            fn rem(self, other: $type) -> VMResult<$type> {
+                if other == 0 {
+                    Err(Trap::DivisionByZero)
+                } else {
+                    Ok(self.wrapping_rem(other))
+                }
+            }
+            fn div(self, other: $type) -> VMResult<$type> {
+                if other == 0 {
+                    return Err(Trap::DivisionByZero);
+                }
+                let (result, is_overflow) = self.overflowing_div(other);
+                if is_overflow {
+                    Err(Trap::SignedIntegerOverflow)
+                } else {
+                    Ok(result)
+                }
+            }
+        }
+    };
+}
+
+impl_integer!(i32);
+impl_integer!(u32);
+impl_integer!(i64);
+impl_integer!(u64);
+
 
 pub trait LittleEndianConvert: Sized {
     fn from_little_endian(buffer: &[u8]) -> Self;
@@ -187,6 +236,7 @@ pub trait ExtendTo<T> {
 
 macro_rules! impl_extend_to {
     ($from:ident, $to:ident) => {
+        #[allow(clippy::cast_lossless)]
         impl ExtendTo<$to> for $from {
             fn extend_to(self) -> $to {
                 self as $to

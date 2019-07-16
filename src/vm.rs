@@ -1,9 +1,9 @@
 extern crate parity_wasm;
 
-use parity_wasm::elements::{FuncBody, Instruction, Module, Type::Function, ValueType};
-use crate::value::{Value, Number, LittleEndianConvert, ExtendTo, WrapTo};
-use crate::nan_preserving_float::{F32, F64};
 
+use crate::nan_preserving_float::{F32, F64};
+use crate::value::{ExtendTo, Integer, LittleEndianConvert, Number, Value, WrapTo};
+use parity_wasm::elements::{FuncBody, Instruction, Module, TableType, Type::Function, ValueType};
 
 #[derive(Clone)]
 pub enum Trap {
@@ -12,9 +12,14 @@ pub enum Trap {
     PopFromEmptyStack,
     ExecutionFinished,
     TypeError(ValueType, ValueType), // Expected, Found
+    DivisionByZero,
+    SignedIntegerOverflow,
+    NoTable,
+    IndirectCalleeAbsent,
+    IndirectCallTypeMismatch,
 }
 
-type VMResult<T> = Result<T, Trap>;
+pub type VMResult<T> = Result<T, Trap>;
 
 #[derive(Default, Clone)]
 struct CodePosition {
@@ -22,14 +27,9 @@ struct CodePosition {
     instr_index: usize,
 }
 
-struct Label {
-    target_instr_index: Option<usize>,
-}
-
-impl Label {
-    fn new(target_instr_index: Option<usize>) -> Self {
-        Label { target_instr_index }
-    }
+enum Label {
+    Bound(usize),
+    Unbound,
 }
 
 struct FunctionFrame {
@@ -41,17 +41,6 @@ const PAGE_SIZE: usize = 64 * 1024; // 64 KiB
 
 struct Memory {
     data: Vec<u8>,
-}
-
-pub struct VM {
-    module: Box<Module>,
-    memory: Memory,
-    ip: CodePosition,
-    globals: Vec<Value>,
-    value_stack: Vec<Value>,
-    label_stack: Vec<Label>,
-    function_stack: Vec<FunctionFrame>,
-    trap: Option<Trap>,
 }
 
 impl Memory {
@@ -66,7 +55,8 @@ impl Memory {
     fn grow(&mut self, delta: u32) -> u32 {
         // TODO: check if maximum reached and fail (return -1)
         let page_count = self.page_count();
-        self.data.resize((page_count + delta) as usize * PAGE_SIZE, 0);
+        self.data
+            .resize((page_count + delta) as usize * PAGE_SIZE, 0);
         page_count
     }
 
@@ -81,9 +71,64 @@ impl Memory {
         // TODO: check memory access
         let size = core::mem::size_of::<T>();
         let address = address as usize;
-        value.to_little_endian(&mut self.data[address..address+size]);
+        value.to_little_endian(&mut self.data[address..address + size]);
         Ok(())
     }
+}
+
+#[derive(Clone)]
+pub enum TableElement {
+    Null,
+    Func(u32),
+}
+
+impl Default for TableElement {
+    fn default() -> Self {
+        TableElement::Null
+    }
+}
+
+pub struct Table {
+    elements: Vec<TableElement>,
+    table_type: TableType,
+}
+
+impl Table {
+    fn new(table_type: TableType) -> Self {
+        let elements = vec![TableElement::Null; table_type.limits().initial() as usize];
+        Table {
+            elements,
+            table_type,
+        }
+    }
+
+    fn get(&self, index: u32) -> TableElement {
+        self.elements
+            .get(index as usize)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    fn from_module(module: &Module) -> Option<Table> {
+        if let Some(table_section) = module.table_section() {
+            if let Some(default_table_type) = table_section.entries().get(0) {
+                return Some(Table::new(*default_table_type));
+            }
+        }
+        None
+    }
+}
+
+pub struct VM {
+    module: Box<Module>,
+    memory: Memory,
+    table: Option<Table>,
+    ip: CodePosition,
+    globals: Vec<Value>,
+    value_stack: Vec<Value>,
+    label_stack: Vec<Label>,
+    function_stack: Vec<FunctionFrame>,
+    trap: Option<Trap>,
 }
 
 impl VM {
@@ -98,21 +143,18 @@ impl VM {
             }
             None => Vec::new(),
         };
+        let table = Table::from_module(&module);
+        // TODO: Setup memory from memory/init sections
         VM {
-            memory: Memory::new(),
             module,
+            memory: Memory::new(),
+            table,
             ip: CodePosition::default(),
             globals,
             value_stack: Vec::new(),
             label_stack: Vec::new(),
             function_stack: Vec::new(),
             trap: None,
-        }
-    }
-
-    fn trap(&mut self, trap: Trap) {
-        if self.trap.is_none() {
-            self.trap = Some(trap);
         }
     }
 
@@ -148,17 +190,22 @@ impl VM {
         self.curr_func().code().elements()
     }
 
-    fn branch(&mut self, index: u32) {
+    fn default_table(&self) -> VMResult<&Table> {
+        self.table.as_ref().ok_or(Trap::NoTable)
+    }
+
+    fn branch(&mut self, mut index: u32) {
         self.label_stack
             .truncate(self.label_stack.len() - index as usize);
-        match self.label_stack.pop().unwrap().target_instr_index {
-            Some(target) => self.ip.instr_index = target,
-            None => {
-                let mut index = index;
+        match self.label_stack.last().unwrap() {
+            Label::Bound(target) => self.ip.instr_index = *target,
+            Label::Unbound => {
+                index += 1;
                 loop {
                     match self.curr_code()[self.ip.instr_index] {
                         Instruction::Block(_) => index += 1,
                         Instruction::Loop(_) => index += 1,
+                        Instruction::If(_) => index += 1,
                         Instruction::End => index -= 1,
                         _ => (),
                     }
@@ -166,8 +213,35 @@ impl VM {
                     if index == 0 {
                         break;
                     }
+
+                    self.ip.instr_index += 1;
                 }
             }
+        }
+    }
+
+    fn branch_else(&mut self) {
+        let mut index = 1;
+        loop {
+            match self.curr_code()[self.ip.instr_index] {
+                Instruction::Block(_) => index += 1,
+                Instruction::Loop(_) => index += 1,
+                Instruction::If(_) => index += 1,
+                Instruction::Else => {
+                    if index == 1 {
+                        self.ip.instr_index += 1;
+                        break;
+                    }
+                }
+                Instruction::End => index -= 1,
+                _ => (),
+            }
+
+            if index == 0 {
+                break;
+            }
+
+            self.ip.instr_index += 1;
         }
     }
 
@@ -177,8 +251,13 @@ impl VM {
         Ok(())
     }
 
-    fn perform_load_extend<T: LittleEndianConvert, U: Number>(&mut self, offset: u32) -> VMResult<()> 
-        where T: ExtendTo<U> {
+    fn perform_load_extend<T: LittleEndianConvert, U: Number>(
+        &mut self,
+        offset: u32,
+    ) -> VMResult<()>
+    where
+        T: ExtendTo<U>,
+    {
         let address = self.pop_expect::<u32>()? + offset;
         let val: T = self.memory.load(address)?;
         let val: U = val.extend_to();
@@ -193,7 +272,10 @@ impl VM {
         Ok(())
     }
 
-    fn perform_store_wrap<T: LittleEndianConvert, U: Number>(&mut self, offset: u32) -> VMResult<()> where U: WrapTo<T> {
+    fn perform_store_wrap<T: LittleEndianConvert, U: Number>(&mut self, offset: u32) -> VMResult<()>
+    where
+        U: WrapTo<T>,
+    {
         let value: U = self.pop_expect()?;
         let value: T = value.wrap_to();
         let address = self.pop_expect::<u32>()? + offset;
@@ -214,19 +296,82 @@ impl VM {
         Ok(())
     }
 
-    #[allow(clippy::float_cmp)]
+    fn binop_try<T: Number, R: Number, F: Fn(T, T) -> VMResult<R>>(
+        &mut self,
+        fun: F,
+    ) -> VMResult<()> {
+        let b: T = self.pop_expect()?;
+        let a: T = self.pop_expect()?;
+        self.push(fun(a, b)?.into());
+        Ok(())
+    }
+
+    fn call(&mut self, index: u32) -> VMResult<()> {
+        let func_type =
+            self.module.function_section().unwrap().entries()[index as usize].type_ref();
+        let Function(func_type) = &self.module.type_section().unwrap().types()[func_type as usize];
+
+        let params_count = func_type.params().len();
+        let mut locals = Vec::new();
+
+        for _ in 0..params_count {
+            locals.push(self.pop()?);
+        }
+        locals.reverse();
+
+        let func = &self.module.code_section().unwrap().bodies()[index as usize];
+        for local in func.locals() {
+            let default_val = Value::default(local.value_type());
+            for _ in 0..local.count() {
+                locals.push(default_val.clone());
+            }
+        }
+
+        self.function_stack.push(FunctionFrame {
+            ret_addr: self.ip.clone(),
+            locals,
+        });
+
+        self.ip = CodePosition {
+            func_index: index as usize,
+            instr_index: 0,
+        };
+
+        Ok(())
+    }
+
     pub fn execute_step(&mut self) -> VMResult<()> {
+        if let Err(trap) = self.execute_step_internal() {
+            if self.trap.is_none() {
+                self.trap = Some(trap);
+            }
+        }
+
+        if let Some(trap) = &self.trap {
+            Err(trap.to_owned())
+        } else {
+            Ok(())
+        }
+    }
+
+    #[allow(clippy::float_cmp)]
+    fn execute_step_internal(&mut self) -> VMResult<()> {
         let func = self.curr_func();
         let instr = func.code().elements()[self.ip.instr_index].clone();
         self.ip.instr_index += 1;
 
         match instr {
-            Instruction::Unreachable => self.trap(Trap::ReachedUnreachable),
+            Instruction::Unreachable => return Err(Trap::ReachedUnreachable),
             Instruction::Nop => (),
-            Instruction::Block(_) => self.label_stack.push(Label::new(None)),
-            Instruction::Loop(_) => self.label_stack.push(Label::new(Some(self.ip.instr_index))),
-            Instruction::If(_) => (),
-            Instruction::Else => (),
+            Instruction::Block(_) => self.label_stack.push(Label::Unbound),
+            Instruction::Loop(_) => self.label_stack.push(Label::Bound(self.ip.instr_index)),
+            Instruction::If(_) => {
+                self.label_stack.push(Label::Unbound);
+                if self.pop_expect::<u32>()? == 0 {
+                    self.branch_else();
+                }
+            }
+            Instruction::Else => self.branch(0),
             Instruction::End => {
                 if self.label_stack.pop().is_none() {
                     let frame = self.function_stack.pop().unwrap();
@@ -239,46 +384,37 @@ impl VM {
                     self.branch(index);
                 }
             }
-            Instruction::BrTable(table_data) => (),
+            Instruction::BrTable(table_data) => {
+                let index = self.pop_expect::<u32>()?;
+                let depth = table_data
+                    .table
+                    .get(index as usize)
+                    .unwrap_or(&table_data.default);
+                self.branch(*depth);
+            }
             Instruction::Return => {
                 let frame = self.function_stack.pop().unwrap();
                 self.ip = frame.ret_addr;
             }
 
             // Calls
-            Instruction::Call(index) => {
-                let func_type =
-                    self.module.function_section().unwrap().entries()[index as usize].type_ref();
-                let Function(func_type) =
-                    &self.module.type_section().unwrap().types()[func_type as usize];
-
-                let params_count = func_type.params().len();
-                let mut locals = Vec::new();
-
-                for _ in 0..params_count {
-                    locals.push(self.pop()?);
-                }
-                locals.reverse();
-
-                let func = &self.module.code_section().unwrap().bodies()[index as usize];
-                for local in func.locals() {
-                    let default_val = Value::default(local.value_type());
-                    for _ in 0..local.count() {
-                        locals.push(default_val.clone());
-                    }
-                }
-
-                self.function_stack.push(FunctionFrame {
-                    ret_addr: self.ip.clone(),
-                    locals,
-                });
-
-                self.ip = CodePosition {
-                    func_index: index as usize,
-                    instr_index: 0,
+            Instruction::Call(index) => self.call(index)?,
+            Instruction::CallIndirect(signature, _) => {
+                let callee = self.pop_expect::<u32>()?;
+                let func_index = match self.default_table()?.get(callee) {
+                    TableElement::Func(func_index) => func_index,
+                    _ => return Err(Trap::IndirectCalleeAbsent),
                 };
+                let func_type = self.module.function_section().unwrap().entries()
+                    [func_index as usize]
+                    .type_ref();
+
+                if func_type != signature {
+                    return Err(Trap::IndirectCallTypeMismatch);
+                }
+
+                self.call(func_index)?;
             }
-            Instruction::CallIndirect(signature, _) => (),
             Instruction::Drop => {
                 self.pop()?;
             }
@@ -316,31 +452,49 @@ impl VM {
             Instruction::F64Load(_flag, offset) => self.perform_load::<F64>(offset)?,
             Instruction::I32Load8S(_flag, offset) => self.perform_load_extend::<i8, u32>(offset)?,
             Instruction::I32Load8U(_flag, offset) => self.perform_load_extend::<u8, u32>(offset)?,
-            Instruction::I32Load16S(_flag, offset) => self.perform_load_extend::<i16, u32>(offset)?,
-            Instruction::I32Load16U(_flag, offset) => self.perform_load_extend::<u16, u32>(offset)?,
+            Instruction::I32Load16S(_flag, offset) => {
+                self.perform_load_extend::<i16, u32>(offset)?
+            }
+            Instruction::I32Load16U(_flag, offset) => {
+                self.perform_load_extend::<u16, u32>(offset)?
+            }
             Instruction::I64Load8S(_flag, offset) => self.perform_load_extend::<i8, u64>(offset)?,
             Instruction::I64Load8U(_flag, offset) => self.perform_load_extend::<u8, u64>(offset)?,
-            Instruction::I64Load16S(_flag, offset) => self.perform_load_extend::<i16, u64>(offset)?,
-            Instruction::I64Load16U(_flag, offset) => self.perform_load_extend::<u16, u64>(offset)?,
-            Instruction::I64Load32S(_flag, offset) => self.perform_load_extend::<i32, u64>(offset)?,
-            Instruction::I64Load32U(_flag, offset) => self.perform_load_extend::<u32, u64>(offset)?,
+            Instruction::I64Load16S(_flag, offset) => {
+                self.perform_load_extend::<i16, u64>(offset)?
+            }
+            Instruction::I64Load16U(_flag, offset) => {
+                self.perform_load_extend::<u16, u64>(offset)?
+            }
+            Instruction::I64Load32S(_flag, offset) => {
+                self.perform_load_extend::<i32, u64>(offset)?
+            }
+            Instruction::I64Load32U(_flag, offset) => {
+                self.perform_load_extend::<u32, u64>(offset)?
+            }
 
             Instruction::I32Store(_flag, offset) => self.perform_store::<u32>(offset)?,
             Instruction::I64Store(_flag, offset) => self.perform_store::<u64>(offset)?,
             Instruction::F32Store(_flag, offset) => self.perform_store::<F32>(offset)?,
             Instruction::F64Store(_flag, offset) => self.perform_store::<F64>(offset)?,
             Instruction::I32Store8(_flag, offset) => self.perform_store_wrap::<u8, u32>(offset)?,
-            Instruction::I32Store16(_flag, offset) => self.perform_store_wrap::<u16, u32>(offset)?,
+            Instruction::I32Store16(_flag, offset) => {
+                self.perform_store_wrap::<u16, u32>(offset)?
+            }
             Instruction::I64Store8(_flag, offset) => self.perform_store_wrap::<u8, u64>(offset)?,
-            Instruction::I64Store16(_flag, offset) => self.perform_store_wrap::<u16, u64>(offset)?,
-            Instruction::I64Store32(_flag, offset) => self.perform_store_wrap::<u32, u64>(offset)?,
+            Instruction::I64Store16(_flag, offset) => {
+                self.perform_store_wrap::<u16, u64>(offset)?
+            }
+            Instruction::I64Store32(_flag, offset) => {
+                self.perform_store_wrap::<u32, u64>(offset)?
+            }
 
             Instruction::CurrentMemory(_) => self.push(Value::I32(self.memory.page_count())),
             Instruction::GrowMemory(_) => {
                 let delta = self.pop_expect::<u32>()?;
                 let result = self.memory.grow(delta);
                 self.push(Value::I32(result));
-            },
+            }
 
             Instruction::I32Const(val) => self.push(Value::I32(val as u32)),
             Instruction::I64Const(val) => self.push(Value::I64(val as u64)),
@@ -356,7 +510,7 @@ impl VM {
             Instruction::I32GtU => self.binop(|a: u32, b: u32| bool_val(a > b))?,
             Instruction::I32LeS => self.binop(|a: u32, b: u32| bool_val(a as i32 <= b as i32))?,
             Instruction::I32LeU => self.binop(|a: u32, b: u32| bool_val(a <= b))?,
-            Instruction::I32GeS => self.binop(|a: u32, b: u32| bool_val(a as i32>= b as i32))?,
+            Instruction::I32GeS => self.binop(|a: u32, b: u32| bool_val(a as i32 >= b as i32))?,
             Instruction::I32GeU => self.binop(|a: u32, b: u32| bool_val(a >= b))?,
 
             Instruction::I64Eqz => self.unop(|x: u64| bool_val(x == 0))?,
@@ -368,7 +522,7 @@ impl VM {
             Instruction::I64GtU => self.binop(|a: u64, b: u64| bool_val(a > b))?,
             Instruction::I64LeS => self.binop(|a: u64, b: u64| bool_val(a as i64 <= b as i64))?,
             Instruction::I64LeU => self.binop(|a: u64, b: u64| bool_val(a <= b))?,
-            Instruction::I64GeS => self.binop(|a: u64, b: u64| bool_val(a as i64>= b as i64))?,
+            Instruction::I64GeS => self.binop(|a: u64, b: u64| bool_val(a as i64 >= b as i64))?,
             Instruction::I64GeU => self.binop(|a: u64, b: u64| bool_val(a >= b))?,
 
             Instruction::F32Eq => self.binop(|a: F32, b: F32| bool_val(a == b))?,
@@ -385,16 +539,20 @@ impl VM {
             Instruction::F64Le => self.binop(|a: F64, b: F64| bool_val(a <= b))?,
             Instruction::F64Ge => self.binop(|a: F64, b: F64| bool_val(a >= b))?,
 
-            Instruction::I32Clz => (),
-            Instruction::I32Ctz => (),
-            Instruction::I32Popcnt => (),
+            Instruction::I32Clz => self.unop(|x: u32| x.leading_zeros())?,
+            Instruction::I32Ctz => self.unop(|x: u32| x.trailing_zeros())?,
+            Instruction::I32Popcnt => self.unop(|x: u32| x.count_ones())?,
             Instruction::I32Add => self.binop(|a: u32, b: u32| a + b)?,
             Instruction::I32Sub => self.binop(|a: u32, b: u32| a - b)?,
             Instruction::I32Mul => self.binop(|a: u32, b: u32| a * b)?,
-            Instruction::I32DivS => (),
-            Instruction::I32DivU => (),
-            Instruction::I32RemS => (),
-            Instruction::I32RemU => (),
+            Instruction::I32DivS => {
+                self.binop_try(|a: u32, b: u32| Ok((a as i32).div(b as i32)? as u32))?
+            }
+            Instruction::I32DivU => self.binop_try(|a: u32, b: u32| a.div(b))?,
+            Instruction::I32RemS => {
+                self.binop_try(|a: u32, b: u32| Ok((a as i32).rem(b as i32)? as u32))?
+            }
+            Instruction::I32RemU => self.binop_try(|a: u32, b: u32| a.rem(b))?,
             Instruction::I32And => self.binop(|a: u32, b: u32| a & b)?,
             Instruction::I32Or => self.binop(|a: u32, b: u32| a | b)?,
             Instruction::I32Xor => self.binop(|a: u32, b: u32| a ^ b)?,
@@ -404,16 +562,20 @@ impl VM {
             Instruction::I32Rotl => self.binop(|a: u32, b: u32| a.rotate_left(b))?,
             Instruction::I32Rotr => self.binop(|a: u32, b: u32| a.rotate_right(b))?,
 
-            Instruction::I64Clz => (),
-            Instruction::I64Ctz => (),
-            Instruction::I64Popcnt => (),
+            Instruction::I64Clz => self.unop(|x: u64| x.leading_zeros())?,
+            Instruction::I64Ctz => self.unop(|x: u64| x.trailing_zeros())?,
+            Instruction::I64Popcnt => self.unop(|x: u64| x.count_ones())?,
             Instruction::I64Add => self.binop(|a: u64, b: u64| a + b)?,
             Instruction::I64Sub => self.binop(|a: u64, b: u64| a - b)?,
             Instruction::I64Mul => self.binop(|a: u64, b: u64| a * b)?,
-            Instruction::I64DivS => (),
-            Instruction::I64DivU => (),
-            Instruction::I64RemS => (),
-            Instruction::I64RemU => (),
+            Instruction::I64DivS => {
+                self.binop_try(|a: u64, b: u64| Ok((a as i64).div(b as i64)? as u64))?
+            }
+            Instruction::I64DivU => self.binop_try(|a: u64, b: u64| a.div(b))?,
+            Instruction::I64RemS => {
+                self.binop_try(|a: u64, b: u64| Ok((a as i64).rem(b as i64)? as u64))?
+            }
+            Instruction::I64RemU => self.binop_try(|a: u64, b: u64| a.rem(b))?,
             Instruction::I64And => self.binop(|a: u64, b: u64| a & b)?,
             Instruction::I64Or => self.binop(|a: u64, b: u64| a | b)?,
             Instruction::I64Xor => self.binop(|a: u64, b: u64| a ^ b)?,
@@ -485,21 +647,18 @@ impl VM {
             Instruction::I64Extend8S => (),
             Instruction::I64Extend16S => (),
             Instruction::I64Extend32S => (),
-            _ => self.trap(Trap::UnknownInstruction(instr)),
+            _ => return Err(Trap::UnknownInstruction(instr)),
         }
 
         if self.function_stack.is_empty() {
-            self.trap(Trap::ExecutionFinished);
+            return Err(Trap::ExecutionFinished);
         }
 
-        if let Some(trap) = &self.trap {
-            Err(trap.to_owned())
-        } else {
-            Ok(())
-        }
+        Ok(())
     }
 }
 
+#[allow(clippy::match_bool)]
 fn bool_val(val: bool) -> u32 {
     match val {
         true => 1,
