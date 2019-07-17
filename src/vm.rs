@@ -526,8 +526,6 @@ impl VM {
         let instr = func.code().elements()[self.ip.instr_index].clone();
         self.ip.instr_index += 1;
 
-        println!("{}: {:?}", instr, self.value_stack());
-
         match instr {
             Instruction::Unreachable => return Err(Trap::ReachedUnreachable),
             Instruction::Nop => (),
