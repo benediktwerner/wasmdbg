@@ -438,7 +438,7 @@ fn cmd_call(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
 
     if args.len() != func_type.params().len() {
         bail!(
-            "Invalid number of arguments. Function #{} takes {} args but {} were given",
+            "Invalid number of arguments. Function #{} takes {} args but got {}",
             func_index,
             func_type.params().len(),
             args.len()
