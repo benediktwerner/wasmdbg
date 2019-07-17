@@ -286,6 +286,11 @@ impl Commands {
                 .help("disassemble [FUNC_INDEX]\n\nDisassemble the current function or the one with the specified index.")
                 .requires_file(),
         );
+        commands.push(
+            Command::new("context", cmd_context)
+                .description("Show current execution context")
+                .requires_running(),
+        );
 
         Commands { commands }
     }
@@ -561,6 +566,18 @@ fn cmd_disassemble(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
     } else {
         bail!("Invalid function index");
     }
+    Ok(())
+}
+
+fn print_header(text: &str) {
+    println!("{}", format!("──[ {} ]──{:─<2$}", text, "", 100 - text.len()).blue())
+}
+
+fn cmd_context(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+    print_header("DISASM");
+    cmd_disassemble(dbg, &[])?;
+    print_header("STACK");
+    cmd_stack(dbg, &[])?;
     Ok(())
 }
 
