@@ -33,6 +33,8 @@ pub enum DebuggerError {
     NoFileLoaded,
     #[fail(display = "The binary is not being run")]
     NoRunningInstance,
+    #[fail(display = "Invalid brekapoint position")]
+    InvalidBreakpointPosition,
     #[fail(display = "This feature is still unimplemented")]
     Unimplemented,
 }
@@ -149,8 +151,16 @@ impl Debugger {
     }
 
     pub fn add_breakpoint(&mut self, breakpoint: CodePosition) -> DebuggerResult<()> {
-        self.get_file_mut()?
-            .breakpoints
+        let file = self.get_file_mut()?;
+        if let Some(func) = file.module().code_section().and_then(|c| c.bodies().get(breakpoint.func_index)) {
+            if func.code().elements().get(breakpoint.instr_index).is_none() {
+                return Err(DebuggerError::InvalidBreakpointPosition);
+            }
+        }
+        else {
+            return Err(DebuggerError::InvalidBreakpointPosition);
+        }
+        file.breakpoints
             .borrow_mut()
             .add_breakpoint(breakpoint);
         Ok(())
