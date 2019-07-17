@@ -2,6 +2,7 @@ extern crate wasmdbg;
 
 
 use std::ops::RangeInclusive;
+use std::sync::Arc;
 
 use failure::Error;
 use parity_wasm::elements::Type::Function;
@@ -180,7 +181,7 @@ pub struct Commands {
 }
 
 impl Commands {
-    pub fn new() -> Commands {
+    pub fn all() -> Commands {
         let mut commands = Vec::new();
         commands.push(Command::new("help", cmd_unreachable).description("Show help"));
         commands.push(
@@ -303,8 +304,22 @@ impl Commands {
         }
         None
     }
+}
 
-    pub fn handle_line(&self, dbg: &mut Debugger, line: &str) -> bool {
+pub struct CommandHandler {
+    commands: Arc<Commands>,
+    last_line: Option<String>,
+}
+
+impl CommandHandler {
+    pub fn new(commands: Arc<Commands>) -> Self {
+        CommandHandler {
+            commands,
+            last_line: None,
+        }
+    }
+
+    pub fn handle_line(&mut self, dbg: &mut Debugger, line: &str) -> bool {
         let mut args_iter = line.split_whitespace();
 
         if let Some(cmd_name) = args_iter.next() {
@@ -313,20 +328,26 @@ impl Commands {
                 "quit" | "exit" => {
                     return true;
                 }
-                "" => (),
-                _ => match self.find_by_name(cmd_name) {
+                _ => match self.commands.find_by_name(cmd_name) {
                     Some(cmd) => cmd.handle(dbg, &args_iter.collect::<Vec<&str>>()),
                     None => println!("Unknown command: \"{}\". Try \"help\".", cmd_name),
                 },
             }
         }
+        else {
+            if let Some(last_line) = self.last_line.clone() {
+                self.handle_line(dbg, &last_line);
+            }
+            return false;
+        }
 
+        self.last_line = Some(line.to_string());
         false
     }
 
     fn print_help(&self, cmd_name: Option<&str>) {
         if let Some(cmd_name) = cmd_name {
-            match self.find_by_name(cmd_name) {
+            match self.commands.find_by_name(cmd_name) {
                 Some(cmd) => println!(
                     "{}",
                     cmd.help
@@ -336,7 +357,7 @@ impl Commands {
                 None => println!("Unknown command: \"{}\". Try \"help\".", cmd_name),
             }
         } else {
-            for cmd in &self.commands {
+            for cmd in self.commands.iter() {
                 match cmd.description {
                     Some(description) => println!("{} - {}", cmd.names(), description),
                     None => println!("{}", cmd.names()),

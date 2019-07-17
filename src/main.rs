@@ -16,7 +16,7 @@ use wasmdbg::Debugger;
 mod cmds;
 mod readline;
 
-use cmds::{load_file, Commands};
+use cmds::{load_file, Commands, CommandHandler};
 use readline::Readline;
 
 
@@ -30,15 +30,16 @@ fn main() {
         .get_matches();
 
     let mut dbg = Debugger::new();
-    let cmds = Arc::new(Commands::new());
+    let cmds = Arc::new(Commands::all());
     let mut rl = Readline::new(cmds.clone());
+    let mut cmd_handler = CommandHandler::new(cmds);
 
     if let Some(file_path) = matches.value_of("file") {
         load_file(&mut dbg, file_path);
     }
 
     while let Some(line) = rl.readline() {
-        if cmds.handle_line(&mut dbg, &line) {
+        if cmd_handler.handle_line(&mut dbg, &line) {
             break;
         }
     }
