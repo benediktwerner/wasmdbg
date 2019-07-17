@@ -1,9 +1,11 @@
 extern crate wasmdbg;
+extern crate terminal_size;
 
 
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
+use terminal_size::{Width, terminal_size};
 use failure::Error;
 use parity_wasm::elements::Type::Function;
 use colored::*;
@@ -590,7 +592,12 @@ fn cmd_disassemble(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
 }
 
 fn print_header(text: &str) {
-    println!("{}", format!("──[ {} ]──{:─<2$}", text, "", 80 - text.len()).blue())
+    let terminal_width = match terminal_size() {
+        Some((Width(w), _)) => w as usize,
+        None => 80,
+    };
+    let line_length = terminal_width - text.len() - 8;
+    println!("{}", format!("──[ {} ]──{:─<2$}", text, "", line_length).blue())
 }
 
 fn print_context(dbg: &mut Debugger) -> CmdResult {
