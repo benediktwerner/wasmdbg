@@ -493,6 +493,9 @@ impl VM {
         if let Err(trap) = self.call(index) {
             return trap;
         }
+        if let Some(index) = self.breakpoints.borrow().find(&self.ip) {
+            return Trap::BreakpointReached(index);
+        }
         self.continue_execution()
     }
 
