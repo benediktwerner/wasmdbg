@@ -1,43 +1,89 @@
+#[macro_use]
+extern crate failure;
 extern crate parity_wasm;
 
-use parity_wasm::{elements::Module, SerializationError};
-use std::fmt;
+
+use std::cell::{Ref, RefCell};
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::rc::Rc;
+
+use parity_wasm::{elements::Module, SerializationError};
 
 pub mod nan_preserving_float;
 pub mod value;
 pub mod vm;
 use value::Value;
-use vm::{InitError, Trap, VM};
+use vm::{CodePosition, InitError, Trap, VM};
 
 
+#[derive(Debug, Fail)]
 pub enum LoadError {
+    #[fail(display = "File not found")]
     FileNotFound,
-    SerializationError(SerializationError),
+    #[fail(display = "Serialization failed: {}", _0)]
+    SerializationError(#[fail(cause)] SerializationError),
 }
 
+#[derive(Debug, Fail)]
 pub enum DebuggerError {
+    #[fail(display = "Failed to initialize wasm instance: {}", _0)]
     InitError(InitError),
+    #[fail(display = "No binary file loaded")]
     NoFileLoaded,
-}
-
-impl fmt::Display for DebuggerError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            DebuggerError::InitError(error) => {
-                write!(f, "Failed to initialize wasm instance: {}", error)
-            }
-            DebuggerError::NoFileLoaded => write!(f, "No binary file loaded"),
-        }
-    }
+    #[fail(display = "The binary is not being run")]
+    NoRunningInstance,
 }
 
 pub type DebuggerResult<T> = Result<T, DebuggerError>;
 
+pub struct Breakpoints {
+    breakpoints: HashSet<CodePosition>,
+    breakpoint_indices: HashMap<u32, CodePosition>,
+    next_breakpoint_index: u32,
+}
+
+impl Breakpoints {
+    fn new() -> Self {
+        Breakpoints {
+            breakpoints: HashSet::new(),
+            breakpoint_indices: HashMap::new(),
+            next_breakpoint_index: 0,
+        }
+    }
+
+    pub fn find(&self, pos: &CodePosition) -> Option<u32> {
+        if self.breakpoints.contains(pos) {
+            for (index, breakpoint) in self.breakpoint_indices.iter() {
+                if breakpoint == pos {
+                    return Some(*index);
+                }
+            }
+        }
+        None
+    }
+
+    fn add_breakpoint(&mut self, breakpoint: CodePosition) {
+        self.breakpoints.insert(breakpoint.clone());
+        self.breakpoint_indices
+            .insert(self.next_breakpoint_index, breakpoint);
+        self.next_breakpoint_index += 1;
+    }
+
+    fn delete_breakpoint(&mut self, index: u32) -> bool {
+        if let Some(breakpoint) = self.breakpoint_indices.get(&index) {
+            self.breakpoints.remove(breakpoint);
+            self.breakpoint_indices.remove(&index);
+            return true;
+        }
+        false
+    }
+}
+
 pub struct File {
     file_path: String,
     module: Rc<Module>,
+    breakpoints: Rc<RefCell<Breakpoints>>,
 }
 
 #[derive(Default)]
@@ -87,10 +133,33 @@ impl Debugger {
         self.file = Some(File {
             file_path: file_path.to_owned(),
             module: Rc::new(module),
+            breakpoints: Rc::new(RefCell::new(Breakpoints::new())),
         });
         self.vm = None;
 
         Ok(())
+    }
+
+    pub fn breakpoints(&self) -> DebuggerResult<Ref<'_, HashMap<u32, CodePosition>>> {
+        Ok(Ref::map(self.get_file()?.breakpoints.borrow(), |b| {
+            &b.breakpoint_indices
+        }))
+    }
+
+    pub fn add_breakpoint(&mut self, breakpoint: CodePosition) -> DebuggerResult<()> {
+        self.get_file_mut()?
+            .breakpoints
+            .borrow_mut()
+            .add_breakpoint(breakpoint);
+        Ok(())
+    }
+
+    pub fn delete_breakpoint(&mut self, index: u32) -> DebuggerResult<bool> {
+        Ok(self
+            .get_file()?
+            .breakpoints
+            .borrow_mut()
+            .delete_breakpoint(index))
     }
 
     pub fn run(&mut self) -> DebuggerResult<Trap> {
@@ -106,10 +175,19 @@ impl Debugger {
         Ok(())
     }
 
+    pub fn continue_execution(&mut self) -> DebuggerResult<Trap> {
+        if let Some(ref mut vm) = self.vm {
+            Ok(vm.continue_execution())
+        } else {
+            Err(DebuggerError::NoRunningInstance)
+        }
+    }
+
     fn create_vm(&mut self) -> DebuggerResult<&mut VM> {
         let file = self.file.as_ref().ok_or(DebuggerError::NoFileLoaded)?;
         let module = file.module.clone();
-        self.vm = Some(VM::new(module).map_err(DebuggerError::InitError)?);
+        let breakpoints = file.breakpoints.clone();
+        self.vm = Some(VM::new(module, breakpoints).map_err(DebuggerError::InitError)?);
         Ok(self.vm.as_mut().unwrap())
     }
 
@@ -118,6 +196,22 @@ impl Debugger {
             Ok(vm)
         } else {
             self.create_vm()
+        }
+    }
+
+    fn get_file(&self) -> DebuggerResult<&File> {
+        if let Some(ref file) = self.file {
+            Ok(file)
+        } else {
+            Err(DebuggerError::NoFileLoaded)
+        }
+    }
+
+    fn get_file_mut(&mut self) -> DebuggerResult<&mut File> {
+        if let Some(ref mut file) = self.file {
+            Ok(file)
+        } else {
+            Err(DebuggerError::NoFileLoaded)
         }
     }
 }

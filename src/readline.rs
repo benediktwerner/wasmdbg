@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use colored::*;
 
-use linefeed::complete::{Completer, Completion, PathCompleter};
+use linefeed::complete::{complete_path, Completer, Completion};
 use linefeed::terminal::{DefaultTerminal, Terminal};
 use linefeed::{Interface, Prompter, ReadResult};
 
@@ -29,16 +29,6 @@ fn find_cmds<'a>(cmds: &'a Commands, prefix: &str) -> Vec<&'a Command> {
 
 struct MyCompleter {
     cmds: Arc<Commands>,
-    path_completer: PathCompleter,
-}
-
-impl MyCompleter {
-    fn new(cmds: Arc<Commands>) -> Self {
-        MyCompleter {
-            cmds,
-            path_completer: PathCompleter,
-        }
-    }
 }
 
 impl<Term: Terminal> Completer<Term> for MyCompleter {
@@ -47,28 +37,33 @@ impl<Term: Terminal> Completer<Term> for MyCompleter {
         curr_word: &str,
         prompter: &Prompter<Term>,
         start: usize,
-        end: usize,
+        _end: usize,
     ) -> Option<Vec<Completion>> {
         let line = prompter.buffer();
         let mut words = line[..start].split_whitespace();
-
-        match words.next() {
-            Some(word) => match self.cmds.find_by_name(word) {
-                Some(cmd) if cmd.argc.start > 0 => self
-                    .path_completer
-                    .complete(curr_word, prompter, start, end),
-                _ => None,
-            },
-            None => Some(
-                find_cmds(&self.cmds, curr_word)
-                    .iter()
-                    .map(|cmd| Completion::simple(cmd.name.to_string()))
-                    .collect(),
-            ),
-        }
+        complete(&self.cmds, curr_word, &mut words)
     }
 }
 
+fn complete(
+    cmds: &Commands,
+    curr_word: &str,
+    other_words: &mut Iterator<Item = &str>,
+) -> Option<Vec<Completion>> {
+    match other_words.next() {
+        Some(word) => match cmds.find_by_name(word) {
+            Some(cmd) if cmd.argc.start > 0 => Some(complete_path(curr_word)),
+            Some(cmd) if cmd.is_subcommand() => complete(&cmd.subcommands, curr_word, other_words),
+            _ => None,
+        },
+        None => Some(
+            find_cmds(cmds, curr_word)
+                .iter()
+                .map(|cmd| Completion::simple(cmd.name.to_string()))
+                .collect(),
+        ),
+    }
+}
 
 pub struct Readline {
     interface: Interface<DefaultTerminal>,
@@ -77,7 +72,7 @@ pub struct Readline {
 impl Readline {
     pub fn new(cmds: Arc<Commands>) -> Self {
         let interface = Interface::new("wasmdbg").unwrap();
-        interface.set_completer(Arc::new(MyCompleter::new(cmds)));
+        interface.set_completer(Arc::new(MyCompleter { cmds }));
         interface
             .set_prompt(&"wasmdbg> ".red().to_string())
             .unwrap();

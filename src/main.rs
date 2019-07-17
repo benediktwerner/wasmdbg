@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate failure;
 
 extern crate clap;
 extern crate colored;
@@ -36,7 +38,7 @@ fn main() {
     }
 
     while let Some(line) = rl.readline() {
-        if cmds.run_line(&mut dbg, &line) {
+        if cmds.handle_line(&mut dbg, &line) {
             break;
         }
     }

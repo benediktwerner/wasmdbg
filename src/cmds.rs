@@ -1,12 +1,17 @@
 extern crate wasmdbg;
 
 
-use parity_wasm::elements::Type::Function;
 use std::ops::Range;
-use wasmdbg::value::Value;
-use wasmdbg::vm::Trap;
-use wasmdbg::{Debugger, DebuggerError, LoadError};
 
+
+use failure::Error;
+use parity_wasm::elements::Type::Function;
+use wasmdbg::value::Value;
+use wasmdbg::vm::{CodePosition, Trap};
+use wasmdbg::{Debugger, LoadError};
+
+
+type CmdResult = Result<(), Error>;
 
 pub struct Command {
     pub name: &'static str,
@@ -16,46 +21,57 @@ pub struct Command {
     pub requires_file: bool,
     pub requires_running: bool,
     pub argc: Range<usize>,
-    pub handler: fn(&mut Debugger, &[&str]),
+    pub handler: Option<fn(&mut Debugger, &[&str]) -> CmdResult>,
+    pub subcommands: Commands,
 }
 
 impl Command {
-    pub fn new(name: &'static str, handler: fn(&mut Debugger, &[&str])) -> Command {
+    pub fn new(name: &'static str, handler: fn(&mut Debugger, &[&str]) -> CmdResult) -> Command {
         Command {
             name,
-            handler,
+            handler: Some(handler),
             aliases: Vec::new(),
             description: None,
             help: None,
             argc: 0..1,
             requires_file: false,
             requires_running: false,
+            subcommands: Commands {
+                commands: Vec::with_capacity(0),
+            },
         }
     }
 
-    pub fn handle(&self, dbg: &mut Debugger, args: &[&str]) {
-        if !self.argc.contains(&args.len()) {
-            if self.argc.len() == 0 {
-                println!("\"{}\" takes no arguments", self.name);
-            } else if self.argc.len() == 1 {
-                println!(
-                    "\"{}\" takes exactly {} args but got {}",
-                    self.name,
-                    self.argc.start,
-                    args.len()
-                );
-            } else {
-                println!(
-                    "\"{}\" takes between {} and {} args but got {}",
-                    self.name,
-                    self.argc.start,
-                    self.argc.end - 1,
-                    args.len()
-                );
-
-            }
-            return;
+    pub fn new_subcommand(name: &'static str) -> Command {
+        Command {
+            name,
+            handler: None,
+            aliases: Vec::new(),
+            description: None,
+            help: None,
+            argc: 0..1,
+            requires_file: false,
+            requires_running: false,
+            subcommands: Commands {
+                commands: Vec::new(),
+            },
         }
+    }
+
+    pub fn is_subcommand(&self) -> bool {
+        self.handler.is_none()
+    }
+
+    fn add_subcommand(mut self, cmd: Command) -> Self {
+        assert!(
+            self.is_subcommand(),
+            "Tried to add subcommand to a command with a set handler"
+        );
+        self.subcommands.commands.push(cmd);
+        self
+    }
+
+    pub fn handle(&self, dbg: &mut Debugger, args: &[&str]) {
         if self.requires_file && dbg.file().is_none() {
             println!("No wasm binary loaded.\nUse the \"load\" command to load one.");
             return;
@@ -64,7 +80,50 @@ impl Command {
             println!("The binary is not being run.");
             return;
         }
-        (self.handler)(dbg, args);
+        if let Some(handler) = self.handler {
+            if !self.argc.contains(&args.len()) {
+                if self.argc.len() == 0 {
+                    println!("\"{}\" takes no arguments", self.name);
+                } else if self.argc.len() == 1 {
+                    println!(
+                        "\"{}\" takes exactly {} args but got {}",
+                        self.name,
+                        self.argc.start,
+                        args.len()
+                    );
+                } else {
+                    println!(
+                        "\"{}\" takes between {} and {} args but got {}",
+                        self.name,
+                        self.argc.start,
+                        self.argc.end - 1,
+                        args.len()
+                    );
+
+                }
+                return;
+            }
+            if let Err(error) = handler(dbg, args) {
+                println!("Error: {}", error);
+            }
+        } else if let Some(name) = args.first() {
+            let cmds: &[Command] = &self.subcommands;
+            for cmd in cmds {
+                if cmd.has_name(name) {
+                    cmd.handle(dbg, &args[1..]);
+                    return;
+                }
+            }
+            println!("Invalid subcommand: \"{}\"", name);
+        } else {
+            println!("This command must be followed by a subcommand:\n");
+            for cmd in self.subcommands.iter() {
+                match cmd.description {
+                    Some(description) => println!("{} - {}", cmd.names(), description),
+                    None => println!("{}", cmd.names()),
+                }
+            }
+        }
     }
 
     pub fn names(&self) -> String {
@@ -135,8 +194,23 @@ impl Commands {
                 .help("load FILE\n\nLoad the wasm binary FILE."),
         );
         commands.push(
-            Command::new("info", cmd_info)
-                .description("Print info about the currently loaded binary")
+            Command::new_subcommand("info")
+                .add_subcommand(
+                    Command::new("file", cmd_info_file)
+                        .description("Print info about the currently loaded binary"),
+                )
+                .add_subcommand(
+                    Command::new("breakpoints", cmd_info_break)
+                        .alias("break")
+                        .description("Print info about breakpoints"),
+                )
+                .add_subcommand(
+                    Command::new("ip", cmd_info_ip)
+                        .description("Print the current instruction pointer")
+                        .requires_running(),
+                )
+                .alias("i")
+                .description("Print info about the programm being debugged")
                 .requires_file(),
         );
         commands.push(
@@ -161,6 +235,27 @@ impl Commands {
                 .description("Print the current value stack")
                 .requires_running(),
         );
+        commands.push(
+            Command::new("continue", cmd_continue)
+                .alias("c")
+                .description("Continue execution after a breakpoint")
+                .requires_running(),
+        );
+        commands.push(
+            Command::new("break", cmd_break)
+                .alias("b")
+                .description("Set a breakpoint")
+                .help("break FUNC_INDEX INSTRUCTION_INDEX\n\nSet a breakpoint at the specified function and instruction. Execution will pause when it reaches that instruction")
+                .takes_args(2)
+                .requires_file(),
+        );
+        commands.push(
+            Command::new("delete", cmd_delete)
+                .description("Delete a breakpoint")
+                .help("delete BREAKPOINT_INDEX\n\nDelete the breakpoint with the specified index.")
+                .takes_args(1)
+                .requires_file(),
+        );
 
         Commands { commands }
     }
@@ -174,7 +269,7 @@ impl Commands {
         None
     }
 
-    pub fn run_line(&self, dbg: &mut Debugger, line: &str) -> bool {
+    pub fn handle_line(&self, dbg: &mut Debugger, line: &str) -> bool {
         let mut args_iter = line.split_whitespace();
 
         if let Some(cmd_name) = args_iter.next() {
@@ -217,6 +312,14 @@ impl Commands {
     }
 }
 
+impl std::ops::Deref for Commands {
+    type Target = [Command];
+
+    fn deref(&self) -> &Self::Target {
+        &self.commands
+    }
+}
+
 pub fn load_file(dbg: &mut Debugger, file_path: &str) {
     if let Err(error) = dbg.load_file(file_path) {
         match error {
@@ -230,15 +333,16 @@ pub fn load_file(dbg: &mut Debugger, file_path: &str) {
     }
 }
 
-fn cmd_unreachable(_dbg: &mut Debugger, _args: &[&str]) {
+fn cmd_unreachable(_dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
     unreachable!();
 }
 
-fn cmd_load(dbg: &mut Debugger, args: &[&str]) {
+fn cmd_load(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
     load_file(dbg, args[0]);
+    Ok(())
 }
 
-fn cmd_info(dbg: &mut Debugger, _args: &[&str]) {
+fn cmd_info_file(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
     let file = dbg.file().unwrap();
     let module = file.module();
 
@@ -248,52 +352,80 @@ fn cmd_info(dbg: &mut Debugger, _args: &[&str]) {
         Some(func_sec) => println!("{} functions", func_sec.entries().len()),
         None => println!("No functions"),
     }
+
+    Ok(())
 }
 
-fn cmd_run(dbg: &mut Debugger, _args: &[&str]) {
-    print_run_result(dbg.run());
-}
+fn cmd_info_break(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+    let breakpoints = dbg.breakpoints()?;
+    ensure!(breakpoints.len() > 0, "No breakpoints");
 
-fn cmd_call(dbg: &mut Debugger, args: &[&str]) {
-    let module = dbg.module().unwrap();
-    match args[0].parse() {
-        Ok(func_index) => {
-            let args = &args[1..];
-            if let Some(func_section) = module.function_section() {
-                if let Some(func) = func_section.entries().get(func_index as usize) {
-                    let func_type = func.type_ref();
-                    let Function(func_type) =
-                        &module.type_section().unwrap().types()[func_type as usize];
-                    if args.len() != func_type.params().len() {
-                        println!("Invalid number of arguments. Function #{} takes {} args but {} were given", func_index, func_type.params().len(), args.len());
-                        return;
-                    }
-                    let mut args_parsed = Vec::new();
-                    for (arg, value_type) in args.iter().zip(func_type.params().iter()) {
-                        if let Some(arg_parsed) = Value::from_str(arg, *value_type) {
-                            args_parsed.push(arg_parsed);
-                        } else {
-                            println!("Failed to parse argument \"{}\" as {}", arg, value_type);
-                            return;
-                        }
-                    }
-                    let has_result = func_type.return_type().is_some();
-                    if print_run_result(dbg.call(func_index, &args_parsed)) && has_result {
-                        println!(" => {:?}", dbg.vm().unwrap().value_stack()[0]);
-                    }
-                } else {
-                    println!("No function with index {}", func_index);
-                }
-            } else {
-                println!("No function section found");
-            }
-        }
-        Err(error) => println!("Failed to parse function index: {}", error),
+    let mut breakpoints: Vec<(&u32, &CodePosition)> = breakpoints.iter().collect();
+    breakpoints.sort_unstable_by(|(index1, _), (index2, _)| index1.cmp(index2));
+
+    println!("{:<8}{:<12}Instruction", "Num", "Function");
+    for (index, breakpoint) in breakpoints {
+        println!(
+            "{:<8}{:<12}{}",
+            index, breakpoint.func_index, breakpoint.instr_index
+        );
     }
+
+    Ok(())
 }
 
-fn cmd_stack(dbg: &mut Debugger, _args: &[&str]) {
-    for value in dbg.vm().unwrap().value_stack() {
+fn cmd_info_ip(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+    let ip = dbg.vm().unwrap().ip();
+    println!("Function: {}", ip.func_index);
+    println!("Instruction: {}", ip.instr_index);
+    Ok(())
+}
+
+fn cmd_run(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+    print_run_result(dbg.run()?, dbg);
+    Ok(())
+}
+
+fn cmd_call(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
+    let module = dbg.module().unwrap();
+    let func_index = args[0].parse()?;
+    let args = &args[1..];
+
+    let func_section = module
+        .function_section()
+        .ok_or_else(|| format_err!("No function section found"))?;
+    let func = func_section
+        .entries()
+        .get(func_index as usize)
+        .ok_or_else(|| format_err!("No function with index {}", func_index))?;
+    let func_type = func.type_ref();
+    let Function(func_type) = &module.type_section().unwrap().types()[func_type as usize];
+
+    if args.len() != func_type.params().len() {
+        bail!(
+            "Invalid number of arguments. Function #{} takes {} args but {} were given",
+            func_index,
+            func_type.params().len(),
+            args.len()
+        );
+    }
+
+    let mut args_parsed = Vec::new();
+    for (arg, value_type) in args.iter().zip(func_type.params().iter()) {
+        if let Some(arg_parsed) = Value::from_str(arg, *value_type) {
+            args_parsed.push(arg_parsed);
+        } else {
+            bail!("Failed to parse argument \"{}\" as {}", arg, value_type);
+        }
+    }
+
+    print_run_result(dbg.call(func_index, &args_parsed)?, dbg);
+
+    Ok(())
+}
+
+fn cmd_stack(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+    for value in dbg.vm().unwrap().value_stack().iter().rev() {
         match value {
             Value::I32(val) => println!("int32   : {}", val),
             Value::I64(val) => println!("int64   : {}", val),
@@ -302,9 +434,10 @@ fn cmd_stack(dbg: &mut Debugger, _args: &[&str]) {
             Value::V128(val) => println!("v128    : {}", val),
         }
     }
+    Ok(())
 }
 
-fn cmd_status(dbg: &mut Debugger, _args: &[&str]) {
+fn cmd_status(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
     if let Some(trap) = dbg.vm().unwrap().trap() {
         if let Trap::ExecutionFinished = trap {
             println!("Finished execution");
@@ -313,23 +446,48 @@ fn cmd_status(dbg: &mut Debugger, _args: &[&str]) {
         }
     } else {
         println!("No trap");
+        let ip = dbg.vm().unwrap().ip();
+        println!("Function: {}", ip.func_index);
+        println!("Instruction: {}", ip.instr_index);
     }
+    Ok(())
 }
 
+fn cmd_break(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
+    let func_index = args[0].parse()?;
+    let instr_index = args[1].parse()?;
+    let breakpoint = CodePosition {
+        func_index,
+        instr_index,
+    };
+    dbg.add_breakpoint(breakpoint)?;
+    Ok(())
+}
 
-fn print_run_result(result: Result<Trap, DebuggerError>) -> bool {
-    match result {
-        Ok(trap) => {
-            if let Trap::ExecutionFinished = trap {
-                println!("Finished execution");
-                return true;
-            } else {
-                println!("Trap: {}", trap);
-            }
-        }
-        Err(error) => {
-            println!("Error: {}", error);
-        }
+fn cmd_delete(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
+    let index = args[0].parse()?;
+    if dbg.delete_breakpoint(index)? {
+        println!("Breakpoint removed");
+    } else {
+        bail!("No breakpoint with index {}", index);
     }
-    false
+    Ok(())
+}
+
+fn cmd_continue(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+    print_run_result(dbg.continue_execution()?, dbg);
+    Ok(())
+}
+
+fn print_run_result(trap: Trap, dbg: &Debugger) {
+    match trap {
+        Trap::ExecutionFinished => {
+            if let Some(result) = dbg.vm().unwrap().value_stack().first() {
+                println!(" => {:?}", result);
+            }
+            println!("Finished execution")
+        }
+        Trap::BreakpointReached(index) => println!("Reached breakpoint {}", index),
+        _ => println!("Trap: {}", trap),
+    }
 }

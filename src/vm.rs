@@ -1,86 +1,73 @@
 extern crate parity_wasm;
 
 
-use crate::nan_preserving_float::{F32, F64};
-use crate::value::{ExtendTo, Integer, LittleEndianConvert, Number, Value, WrapTo};
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use parity_wasm::elements::{
     FuncBody, InitExpr, Instruction, Module, ResizableLimits, TableType, Type::Function, ValueType,
 };
-use std::fmt;
-use std::rc::Rc;
+
+use crate::nan_preserving_float::{F32, F64};
+use crate::value::{ExtendTo, Integer, LittleEndianConvert, Number, Value, WrapTo};
+use crate::Breakpoints;
 
 
+#[derive(Debug, Fail)]
 pub enum InitError {
+    #[fail(display = "Initalizer contains global.get which requires imports (unimplemented)")]
     InitExprGlobalGetUnimplemented,
+    #[fail(display = "Initializer contains invalid instruction: {}", _0)]
     InitExprInvalidInstruction(Instruction),
-    InitMismatchedType(ValueType, ValueType), // Expected, Found
+    #[fail(
+        display = "Initializer type mismatch. Expected \"{}\", found \"{}\"",
+        expected, found
+    )]
+    InitMismatchedType {
+        expected: ValueType,
+        found: ValueType,
+    },
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Fail)]
 pub enum Trap {
+    #[fail(display = "Reached unreachable")]
     ReachedUnreachable,
+    #[fail(display = "Unknown instruction \"{}\"", _0)]
     UnknownInstruction(Instruction),
+    #[fail(display = "Pop from empty stack")]
     PopFromEmptyStack,
+    #[fail(display = "Tried to access function frame but there was none")]
+    NoFunctionFrame,
+    #[fail(display = "Execution finished")]
     ExecutionFinished,
-    TypeError(ValueType, ValueType), // Expected, Found
+    #[fail(display = "Type error. Expected \"{}\", found \"{}\"", expected, found)]
+    TypeError {
+        expected: ValueType,
+        found: ValueType,
+    },
+    #[fail(display = "Division by zero")]
     DivisionByZero,
+    #[fail(display = "Signed integer overflow")]
     SignedIntegerOverflow,
+    #[fail(display = "No table present")]
     NoTable,
+    #[fail(display = "Indirect callee absent (no table or invalid table index)")]
     IndirectCalleeAbsent,
+    #[fail(display = "Indirect call type mismatch")]
     IndirectCallTypeMismatch,
+    #[fail(display = "No start function")]
     NoStartFunction,
-}
-
-impl fmt::Display for InitError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            InitError::InitExprGlobalGetUnimplemented => write!(
-                f,
-                "Initalizer contains global.get which requires imports (unimplemented)"
-            ),
-            InitError::InitExprInvalidInstruction(instr) => {
-                write!(f, "Initializer contains invalid instruction: {}", instr)
-            }
-            InitError::InitMismatchedType(expected, found) => write!(
-                f,
-                "Initializer type mismatch. Expected \"{}\", found \"{}\"",
-                expected, found
-            ),
-        }
-    }
-}
-
-impl fmt::Display for Trap {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Trap::ReachedUnreachable => write!(f, "Reached unreachable"),
-            Trap::UnknownInstruction(instr) => write!(f, "Unknown instruction \"{}\"", instr),
-            Trap::PopFromEmptyStack => write!(f, "Pop from empty stack"),
-            Trap::ExecutionFinished => write!(f, "Execution finished"),
-            Trap::TypeError(expected, found) => write!(
-                f,
-                "Type error. Expected \"{}\", found \"{}\"",
-                expected, found
-            ),
-            Trap::DivisionByZero => write!(f, "Division by zero"),
-            Trap::SignedIntegerOverflow => write!(f, "Signed integer overflow"),
-            Trap::NoTable => write!(f, "No table present"),
-            Trap::IndirectCalleeAbsent => write!(
-                f,
-                "Indirect callee absent (no table or invalid table index)"
-            ),
-            Trap::IndirectCallTypeMismatch => write!(f, "Indirect call type mismatch"),
-            Trap::NoStartFunction => write!(f, "No start function"),
-        }
-    }
+    #[fail(display = "Reached breakpoint {}", _0)]
+    BreakpointReached(u32),
 }
 
 pub type VMResult<T> = Result<T, Trap>;
 
-#[derive(Default, Clone)]
-struct CodePosition {
-    func_index: usize,
-    instr_index: usize,
+#[derive(Default, Clone, PartialEq, Eq, Hash)]
+pub struct CodePosition {
+    pub func_index: usize,
+    pub instr_index: usize,
 }
 
 enum Label {
@@ -233,10 +220,11 @@ pub struct VM {
     label_stack: Vec<Label>,
     function_stack: Vec<FunctionFrame>,
     trap: Option<Trap>,
+    breakpoints: Rc<RefCell<Breakpoints>>,
 }
 
 impl VM {
-    pub fn new(module: Rc<Module>) -> Result<VM, InitError> {
+    pub fn new(module: Rc<Module>, breakpoints: Rc<RefCell<Breakpoints>>) -> Result<VM, InitError> {
         // TODO: Validate module
 
         let globals = match module.global_section() {
@@ -245,10 +233,10 @@ impl VM {
                 for global in global_section.entries() {
                     let val = eval_init_expr(global.init_expr())?;
                     if val.value_type() != global.global_type().content_type() {
-                        return Err(InitError::InitMismatchedType(
-                            global.global_type().content_type(),
-                            val.value_type(),
-                        ));
+                        return Err(InitError::InitMismatchedType {
+                            expected: global.global_type().content_type(),
+                            found: val.value_type(),
+                        });
                     }
                     globals.push(val);
                 }
@@ -269,6 +257,7 @@ impl VM {
             label_stack: Vec::new(),
             function_stack: Vec::new(),
             trap: None,
+            breakpoints,
         })
     }
 
@@ -278,6 +267,10 @@ impl VM {
 
     pub fn trap(&self) -> Option<&Trap> {
         self.trap.as_ref()
+    }
+
+    pub fn ip(&self) -> CodePosition {
+        self.ip.clone()
     }
 
     fn push(&mut self, val: Value) {
@@ -293,15 +286,21 @@ impl VM {
             if let Some(val) = val.expect::<T>() {
                 Ok(val)
             } else {
-                Err(Trap::TypeError(val.value_type(), T::value_type()))
+                Err(Trap::TypeError {
+                    expected: val.value_type(),
+                    found: T::value_type(),
+                })
             }
         } else {
             Err(Trap::PopFromEmptyStack)
         }
     }
 
-    fn locals(&mut self) -> &mut [Value] {
-        &mut self.function_stack.last_mut().unwrap().locals
+    fn locals(&mut self) -> VMResult<&mut [Value]> {
+        if let Some(frame) = self.function_stack.last_mut() {
+            return Ok(&mut frame.locals);
+        }
+        Err(Trap::NoFunctionFrame)
     }
 
     fn curr_func(&self) -> &FuncBody {
@@ -486,6 +485,10 @@ impl VM {
         if let Err(trap) = self.call(index) {
             return trap;
         }
+        self.continue_execution()
+    }
+
+    pub fn continue_execution(&mut self) -> Trap {
         loop {
             if let Err(trap) = self.execute_step() {
                 return trap;
@@ -499,6 +502,9 @@ impl VM {
         }
 
         if let Err(trap) = self.execute_step_internal() {
+            if let Trap::BreakpointReached(_) = trap {
+                return Err(trap);
+            }
             self.trap = Some(trap.clone());
             return Err(trap);
         }
@@ -574,16 +580,16 @@ impl VM {
             }
             Instruction::Select => (),
             Instruction::GetLocal(index) => {
-                let val = self.locals()[index as usize];
+                let val = self.locals()?[index as usize];
                 self.push(val);
             }
             Instruction::SetLocal(index) => {
                 let val = self.pop()?;
-                self.locals()[index as usize] = val;
+                self.locals()?[index as usize] = val;
             }
             Instruction::TeeLocal(index) => {
                 let val = self.value_stack.last().ok_or(Trap::PopFromEmptyStack)?;
-                self.locals()[index as usize] = *val;
+                self.locals()?[index as usize] = *val;
             }
             Instruction::GetGlobal(index) => {
                 let val = self.globals[index as usize];
@@ -802,6 +808,10 @@ impl VM {
 
         if self.function_stack.is_empty() {
             return Err(Trap::ExecutionFinished);
+        }
+
+        if let Some(index) = self.breakpoints.borrow().find(&self.ip) {
+            return Err(Trap::BreakpointReached(index));
         }
 
         Ok(())
