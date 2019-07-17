@@ -460,7 +460,12 @@ fn cmd_call(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
 }
 
 fn cmd_stack(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
-    for value in dbg.vm().unwrap().value_stack().iter().rev() {
+    let value_stack = dbg.vm().unwrap().value_stack();
+    if value_stack.is_empty() {
+        println!("<empty>");
+        return Ok(());
+    }
+    for value in value_stack.iter().rev() {
         match value {
             Value::I32(val) => println!("int32   : {}", val),
             Value::I64(val) => println!("int64   : {}", val),
