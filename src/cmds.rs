@@ -417,8 +417,7 @@ fn cmd_info_ip(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
 }
 
 fn cmd_run(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
-    print_run_result(dbg.run()?, dbg);
-    Ok(())
+    print_run_result(dbg.run()?, dbg)
 }
 
 fn cmd_call(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
@@ -454,9 +453,7 @@ fn cmd_call(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
         }
     }
 
-    print_run_result(dbg.call(func_index, &args_parsed)?, dbg);
-
-    Ok(())
+    print_run_result(dbg.call(func_index, &args_parsed)?, dbg)
 }
 
 fn cmd_stack(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
@@ -515,30 +512,27 @@ fn cmd_delete(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
 }
 
 fn cmd_continue(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
-    print_run_result(dbg.continue_execution()?, dbg);
-    Ok(())
+    print_run_result(dbg.continue_execution()?, dbg)
 }
 
 fn cmd_step(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
     let steps: u32 = args.get(0).map(|n| n.parse()).transpose()?.unwrap_or(1);
     for _ in 0..steps {
         if let Some(trap) = dbg.single_instruction()? {
-            print_run_result(trap, dbg);
-            return Ok(());
+            return print_run_result(trap, dbg);
         }
     }
-    Ok(())
+    print_context(dbg)
 }
 
 fn cmd_next(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
     let steps: u32 = args.get(0).map(|n| n.parse()).transpose()?.unwrap_or(1);
     for _ in 0..steps {
         if let Some(trap) = dbg.next_instruction()? {
-            print_run_result(trap, dbg);
-            return Ok(());
+            return print_run_result(trap, dbg);
         }
     }
-    Ok(())
+    print_context(dbg)
 }
 
 fn cmd_disassemble(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
@@ -575,26 +569,35 @@ fn cmd_disassemble(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
 }
 
 fn print_header(text: &str) {
-    println!("{}", format!("──[ {} ]──{:─<2$}", text, "", 100 - text.len()).blue())
+    println!("{}", format!("──[ {} ]──{:─<2$}", text, "", 80 - text.len()).blue())
 }
 
-fn cmd_context(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+fn print_context(dbg: &mut Debugger) -> CmdResult {
     print_header("DISASM");
     cmd_disassemble(dbg, &[])?;
     print_header("STACK");
-    cmd_stack(dbg, &[])?;
-    Ok(())
+    cmd_stack(dbg, &[])
 }
 
-fn print_run_result(trap: Trap, dbg: &Debugger) {
+fn cmd_context(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+    print_context(dbg)
+}
+
+fn print_run_result(trap: Trap, dbg: &mut Debugger) -> CmdResult {
     match trap {
         Trap::ExecutionFinished => {
-            if let Some(result) = dbg.vm().unwrap().value_stack().first() {
-                println!(" => {:?}", result);
+            if let Some(result) = dbg.get_vm()?.value_stack().first() {
+                println!("Finished execution => {:?}", result);
             }
-            println!("Finished execution")
+            else {
+                println!("Finished execution")
+            }
         }
-        Trap::BreakpointReached(index) => println!("Reached breakpoint {}", index),
+        Trap::BreakpointReached(index) => {
+            println!("Reached breakpoint {}", index);
+            print_context(dbg)?;
+        },
         _ => println!("Trap: {}", trap),
     }
+    Ok(())
 }
