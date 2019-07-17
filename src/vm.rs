@@ -50,6 +50,8 @@ pub enum Trap {
     DivisionByZero,
     #[fail(display = "Signed integer overflow")]
     SignedIntegerOverflow,
+    #[fail(display = "Invalid conversion to integer")]
+    InvalidConversionToInt,
     #[fail(display = "No table present")]
     NoTable,
     #[fail(display = "Indirect callee absent (no table or invalid table index)")]
@@ -407,6 +409,12 @@ impl VM {
     fn unop<T: Number, R: Number, F: Fn(T) -> R>(&mut self, fun: F) -> VMResult<()> {
         let val: T = self.pop_expect()?;
         self.push(fun(val).into());
+        Ok(())
+    }
+
+    fn unop_try<T: Number, R: Number, F: Fn(T) -> VMResult<R>>(&mut self, fun: F) -> VMResult<()> {
+        let val: T = self.pop_expect()?;
+        self.push(fun(val)?.into());
         Ok(())
     }
 
@@ -771,38 +779,33 @@ impl VM {
             Instruction::F64Max => self.binop(|a: F64, b: F64| a.max(b))?,
             Instruction::F64Copysign => self.binop(|a: F64, b: F64| a.copysign(b))?,
 
-            Instruction::I32WrapI64 => (),
-            Instruction::I32TruncSF32 => (),
-            Instruction::I32TruncUF32 => (),
-            Instruction::I32TruncSF64 => (),
-            Instruction::I32TruncUF64 => (),
-            Instruction::I64ExtendSI32 => (),
-            Instruction::I64ExtendUI32 => (),
-            Instruction::I64TruncSF32 => (),
-            Instruction::I64TruncUF32 => (),
-            Instruction::I64TruncSF64 => (),
-            Instruction::I64TruncUF64 => (),
-            Instruction::F32ConvertSI32 => (),
-            Instruction::F32ConvertUI32 => (),
-            Instruction::F32ConvertSI64 => (),
-            Instruction::F32ConvertUI64 => (),
-            Instruction::F32DemoteF64 => (),
-            Instruction::F64ConvertSI32 => (),
-            Instruction::F64ConvertUI32 => (),
-            Instruction::F64ConvertSI64 => (),
-            Instruction::F64ConvertUI64 => (),
-            Instruction::F64PromoteF32 => (),
+            Instruction::I32WrapI64 => self.unop(|x: u64| x as u32)?,
+            Instruction::I32TruncSF32 => self.unop_try(|x: F32| Ok(x.trunc_to_i32().ok_or(Trap::InvalidConversionToInt)? as u32))?,
+            Instruction::I32TruncUF32 => self.unop_try(|x: F32| x.trunc_to_u32().ok_or(Trap::InvalidConversionToInt))?,
+            Instruction::I32TruncSF64 => self.unop_try(|x: F64| Ok(x.trunc_to_i32().ok_or(Trap::InvalidConversionToInt)? as u32))?,
+            Instruction::I32TruncUF64 => self.unop_try(|x: F64| x.trunc_to_u32().ok_or(Trap::InvalidConversionToInt))?,
+            Instruction::I64ExtendSI32 => self.unop(|x: u32| -> u64 { (x as i32).extend_to()})?,
+            Instruction::I64ExtendUI32 => self.unop(|x: u32| -> u64 { x.extend_to() })?,
+            Instruction::I64TruncSF32 => self.unop_try(|x: F32| Ok(x.trunc_to_i64().ok_or(Trap::InvalidConversionToInt)? as u64))?,
+            Instruction::I64TruncUF32 => self.unop_try(|x: F32| x.trunc_to_u64().ok_or(Trap::InvalidConversionToInt))?,
+            Instruction::I64TruncSF64 => self.unop_try(|x: F64| Ok(x.trunc_to_i64().ok_or(Trap::InvalidConversionToInt)? as u64))?,
+            Instruction::I64TruncUF64 => self.unop_try(|x: F64| x.trunc_to_u64().ok_or(Trap::InvalidConversionToInt))?,
+            Instruction::F32ConvertSI32 => self.unop(|x: u32| x as i32 as f32)?,
+            Instruction::F32ConvertUI32 => self.unop(|x: u32| x as f32)?,
+            Instruction::F32ConvertSI64 => self.unop(|x: u64| x as i64 as f32)?,
+            Instruction::F32ConvertUI64 => self.unop(|x: u64| x as f32)?,
+            Instruction::F32DemoteF64 => self.unop(|x: f64| x as f32)?,
+            Instruction::F64ConvertSI32 => self.unop(|x: u32| x as i32 as f64)?,
+            Instruction::F64ConvertUI32 => self.unop(|x: u32| x as f64)?,
+            Instruction::F64ConvertSI64 => self.unop(|x: u64| x as i64 as f64)?,
+            Instruction::F64ConvertUI64 => self.unop(|x: u64| x as f64)?,
+            Instruction::F64PromoteF32 => self.unop(|x: f32| x as f64)?,
 
             Instruction::I32ReinterpretF32 => self.unop(|x: F32| x.to_bits())?,
             Instruction::I64ReinterpretF64 => self.unop(|x: F64| x.to_bits())?,
             Instruction::F32ReinterpretI32 => self.unop(F32::from_bits)?,
             Instruction::F64ReinterpretI64 => self.unop(F64::from_bits)?,
 
-            Instruction::I32Extend8S => (),
-            Instruction::I32Extend16S => (),
-            Instruction::I64Extend8S => (),
-            Instruction::I64Extend16S => (),
-            Instruction::I64Extend32S => (),
             _ => return Err(Trap::UnknownInstruction(instr)),
         }
 
