@@ -54,9 +54,9 @@ impl<Term: Terminal> Completer<Term> for MyCompleter {
 
         match words.next() {
             Some(word) => match self.cmds.find_by_name(word) {
-                Some(cmd) if cmd.argc > 0 => {
-                    self.path_completer.complete(curr_word, prompter, start, end)
-                }
+                Some(cmd) if cmd.argc.start > 0 => self
+                    .path_completer
+                    .complete(curr_word, prompter, start, end),
                 _ => None,
             },
             None => Some(

@@ -3,9 +3,10 @@ use std::any::Any;
 use parity_wasm::elements::ValueType;
 use crate::nan_preserving_float::{F32, F64};
 use crate::vm::{Trap, VMResult};
+use std::str::FromStr;
 
 
-#[derive(Clone)]
+#[derive(Clone, Copy, Debug)]
 pub enum Value {
     I32(u32),
     I64(u64),
@@ -44,11 +45,39 @@ impl Value {
             Value::V128(ref val) => val,
         }
     }
+
+    pub fn expect<T: Number>(&self) -> Option<T> {
+        if let Some(val) = self.value_as_any().downcast_ref::<T>() {
+            Some(*val)
+        } else {
+            None
+        }
+    }
+
+    pub fn from_str(s: &str, value_type: ValueType) -> Option<Self> {
+        Some(match value_type {
+            ValueType::I32 => Value::I32(i64::from_str(s).ok()? as u32),
+            ValueType::I64 => Value::I64(i128::from_str(s).ok()? as u64),
+            ValueType::F32 => Value::from(f32::from_str(s).ok()?),
+            ValueType::F64 => Value::from(f64::from_str(s).ok()?),
+            ValueType::V128 => Value::V128(u128::from_str(s).ok()?),
+        })
+    }
 }
 
+impl From<i32> for Value {
+    fn from(val: i32) -> Self {
+        Value::from(val as u32)
+    }
+}
 impl From<u32> for Value {
     fn from(val: u32) -> Self {
         Value::I32(val)
+    }
+}
+impl From<i64> for Value {
+    fn from(val: i64) -> Self {
+        Value::from(val as u64)
     }
 }
 impl From<u64> for Value {

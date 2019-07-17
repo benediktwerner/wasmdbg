@@ -28,6 +28,7 @@
 
 use core::cmp::{Ordering, PartialEq, PartialOrd};
 use core::ops::{Add, Div, Mul, Neg, Rem, Sub};
+use std::fmt;
 
 macro_rules! impl_binop {
     ($for:ident, $is:ident, $op:ident, $func_name:ident) => {
@@ -196,6 +197,12 @@ macro_rules! float {
         impl Default for $for {
             fn default() -> Self {
                 Self::from_bits(0)
+            }
+        }
+
+        impl fmt::Display for $for {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                self.to_float().fmt(f)
             }
         }
     };

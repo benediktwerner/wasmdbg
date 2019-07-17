@@ -3,7 +3,18 @@ extern crate parity_wasm;
 
 use crate::nan_preserving_float::{F32, F64};
 use crate::value::{ExtendTo, Integer, LittleEndianConvert, Number, Value, WrapTo};
-use parity_wasm::elements::{FuncBody, Instruction, Module, TableType, Type::Function, ValueType};
+use parity_wasm::elements::{
+    FuncBody, InitExpr, Instruction, Module, ResizableLimits, TableType, Type::Function, ValueType,
+};
+use std::fmt;
+use std::rc::Rc;
+
+
+pub enum InitError {
+    InitExprGlobalGetUnimplemented,
+    InitExprInvalidInstruction(Instruction),
+    InitMismatchedType(ValueType, ValueType), // Expected, Found
+}
 
 #[derive(Clone)]
 pub enum Trap {
@@ -17,6 +28,51 @@ pub enum Trap {
     NoTable,
     IndirectCalleeAbsent,
     IndirectCallTypeMismatch,
+    NoStartFunction,
+}
+
+impl fmt::Display for InitError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            InitError::InitExprGlobalGetUnimplemented => write!(
+                f,
+                "Initalizer contains global.get which requires imports (unimplemented)"
+            ),
+            InitError::InitExprInvalidInstruction(instr) => {
+                write!(f, "Initializer contains invalid instruction: {}", instr)
+            }
+            InitError::InitMismatchedType(expected, found) => write!(
+                f,
+                "Initializer type mismatch. Expected \"{}\", found \"{}\"",
+                expected, found
+            ),
+        }
+    }
+}
+
+impl fmt::Display for Trap {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Trap::ReachedUnreachable => write!(f, "Reached unreachable"),
+            Trap::UnknownInstruction(instr) => write!(f, "Unknown instruction \"{}\"", instr),
+            Trap::PopFromEmptyStack => write!(f, "Pop from empty stack"),
+            Trap::ExecutionFinished => write!(f, "Execution finished"),
+            Trap::TypeError(expected, found) => write!(
+                f,
+                "Type error. Expected \"{}\", found \"{}\"",
+                expected, found
+            ),
+            Trap::DivisionByZero => write!(f, "Division by zero"),
+            Trap::SignedIntegerOverflow => write!(f, "Signed integer overflow"),
+            Trap::NoTable => write!(f, "No table present"),
+            Trap::IndirectCalleeAbsent => write!(
+                f,
+                "Indirect callee absent (no table or invalid table index)"
+            ),
+            Trap::IndirectCallTypeMismatch => write!(f, "Indirect call type mismatch"),
+            Trap::NoStartFunction => write!(f, "No start function"),
+        }
+    }
 }
 
 pub type VMResult<T> = Result<T, Trap>;
@@ -41,11 +97,42 @@ const PAGE_SIZE: usize = 64 * 1024; // 64 KiB
 
 struct Memory {
     data: Vec<u8>,
+    limits: ResizableLimits,
 }
 
 impl Memory {
     fn new() -> Memory {
-        Memory { data: Vec::new() }
+        Memory {
+            data: Vec::new(),
+            limits: ResizableLimits::new(0, None),
+        }
+    }
+
+    fn from_module(module: &Module) -> Result<Self, InitError> {
+        if let Some(memory_section) = module.memory_section() {
+            if let Some(memory) = memory_section.entries().get(0) {
+                let limits = *memory.limits();
+                let mut data = vec![0; (limits.initial() as usize) * PAGE_SIZE];
+
+                if let Some(data_section) = module.data_section() {
+                    for data_segment in data_section.entries() {
+                        if data_segment.index() == 0 {
+                            let offset = match data_segment.offset() {
+                                Some(offset_expr) => {
+                                    eval_init_expr(offset_expr)?.expect::<u32>().unwrap_or(0)
+                                }
+                                None => 0,
+                            } as usize;
+                            let len = data_segment.value().len();
+                            data[offset..offset + len].copy_from_slice(data_segment.value());
+                        }
+                    }
+                }
+
+                return Ok(Memory { data, limits });
+            }
+        }
+        Ok(Self::new())
     }
 
     pub fn page_count(&self) -> u32 {
@@ -55,6 +142,11 @@ impl Memory {
     fn grow(&mut self, delta: u32) -> u32 {
         // TODO: check if maximum reached and fail (return -1)
         let page_count = self.page_count();
+        if let Some(max) = self.limits.maximum() {
+            if page_count + delta > max {
+                return -1i32 as u32;
+            }
+        }
         self.data
             .resize((page_count + delta) as usize * PAGE_SIZE, 0);
         page_count
@@ -119,8 +211,20 @@ impl Table {
     }
 }
 
+fn eval_init_expr(init_expr: &InitExpr) -> Result<Value, InitError> {
+    let val: Value = match &init_expr.code()[0] {
+        Instruction::I32Const(val) => (*val).into(),
+        Instruction::I64Const(val) => (*val).into(),
+        Instruction::F32Const(val) => (*val).into(),
+        Instruction::F64Const(val) => (*val).into(),
+        Instruction::GetGlobal(_) => return Err(InitError::InitExprGlobalGetUnimplemented),
+        instr => return Err(InitError::InitExprInvalidInstruction(instr.clone())),
+    };
+    Ok(val)
+}
+
 pub struct VM {
-    module: Box<Module>,
+    module: Rc<Module>,
     memory: Memory,
     table: Option<Table>,
     ip: CodePosition,
@@ -132,22 +236,32 @@ pub struct VM {
 }
 
 impl VM {
-    pub fn new(module: Box<Module>) -> VM {
+    pub fn new(module: Rc<Module>) -> Result<VM, InitError> {
+        // TODO: Validate module
+
         let globals = match module.global_section() {
             Some(global_section) => {
                 let mut globals = Vec::with_capacity(global_section.entries().len());
                 for global in global_section.entries() {
-                    globals.push(Value::default(global.global_type().content_type()));
+                    let val = eval_init_expr(global.init_expr())?;
+                    if val.value_type() != global.global_type().content_type() {
+                        return Err(InitError::InitMismatchedType(
+                            global.global_type().content_type(),
+                            val.value_type(),
+                        ));
+                    }
+                    globals.push(val);
                 }
                 globals
             }
             None => Vec::new(),
         };
+        let memory = Memory::from_module(&module)?;
         let table = Table::from_module(&module);
-        // TODO: Setup memory from memory/init sections
-        VM {
+
+        Ok(VM {
             module,
-            memory: Memory::new(),
+            memory,
             table,
             ip: CodePosition::default(),
             globals,
@@ -155,7 +269,15 @@ impl VM {
             label_stack: Vec::new(),
             function_stack: Vec::new(),
             trap: None,
-        }
+        })
+    }
+
+    pub fn value_stack(&self) -> &Vec<Value> {
+        &self.value_stack
+    }
+
+    pub fn trap(&self) -> Option<&Trap> {
+        self.trap.as_ref()
     }
 
     fn push(&mut self, val: Value) {
@@ -168,8 +290,8 @@ impl VM {
 
     fn pop_expect<T: Number>(&mut self) -> VMResult<T> {
         if let Some(val) = self.value_stack.pop() {
-            if let Some(val) = val.value_as_any().downcast_ref::<T>() {
-                Ok(*val)
+            if let Some(val) = val.expect::<T>() {
+                Ok(val)
             } else {
                 Err(Trap::TypeError(val.value_type(), T::value_type()))
             }
@@ -323,7 +445,7 @@ impl VM {
         for local in func.locals() {
             let default_val = Value::default(local.value_type());
             for _ in 0..local.count() {
-                locals.push(default_val.clone());
+                locals.push(default_val);
             }
         }
 
@@ -338,6 +460,37 @@ impl VM {
         };
 
         Ok(())
+    }
+
+    pub fn run(&mut self) -> Trap {
+        if let Some(start_function) = self.module.start_section() {
+            self.run_func(start_function)
+        } else {
+            Trap::NoStartFunction
+        }
+    }
+
+    pub fn run_func(&mut self, index: u32) -> Trap {
+        self.run_func_args(index, &[])
+    }
+
+    pub fn run_func_args(&mut self, index: u32, args: &[Value]) -> Trap {
+        self.function_stack.clear();
+        self.label_stack.clear();
+        self.value_stack.clear();
+        self.trap = None;
+        self.ip = CodePosition::default();
+        for arg in args {
+            self.push(*arg);
+        }
+        if let Err(trap) = self.call(index) {
+            return trap;
+        }
+        loop {
+            if let Err(trap) = self.execute_step() {
+                return trap;
+            }
+        }
     }
 
     pub fn execute_step(&mut self) -> VMResult<()> {
@@ -358,6 +511,8 @@ impl VM {
         let func = self.curr_func();
         let instr = func.code().elements()[self.ip.instr_index].clone();
         self.ip.instr_index += 1;
+
+        println!("{}: {:?}", instr, self.value_stack());
 
         match instr {
             Instruction::Unreachable => return Err(Trap::ReachedUnreachable),
@@ -419,7 +574,7 @@ impl VM {
             }
             Instruction::Select => (),
             Instruction::GetLocal(index) => {
-                let val = self.locals()[index as usize].clone();
+                let val = self.locals()[index as usize];
                 self.push(val);
             }
             Instruction::SetLocal(index) => {
@@ -427,15 +582,11 @@ impl VM {
                 self.locals()[index as usize] = val;
             }
             Instruction::TeeLocal(index) => {
-                let val = self
-                    .value_stack
-                    .last()
-                    .ok_or(Trap::PopFromEmptyStack)?
-                    .clone();
-                self.locals()[index as usize] = val;
+                let val = self.value_stack.last().ok_or(Trap::PopFromEmptyStack)?;
+                self.locals()[index as usize] = *val;
             }
             Instruction::GetGlobal(index) => {
-                let val = self.globals[index as usize].clone();
+                let val = self.globals[index as usize];
                 self.push(val);
             }
             Instruction::SetGlobal(index) => {
