@@ -152,17 +152,18 @@ impl Debugger {
 
     pub fn add_breakpoint(&mut self, breakpoint: CodePosition) -> DebuggerResult<()> {
         let file = self.get_file_mut()?;
-        if let Some(func) = file.module().code_section().and_then(|c| c.bodies().get(breakpoint.func_index)) {
+        if let Some(func) = file
+            .module()
+            .code_section()
+            .and_then(|c| c.bodies().get(breakpoint.func_index))
+        {
             if func.code().elements().get(breakpoint.instr_index).is_none() {
                 return Err(DebuggerError::InvalidBreakpointPosition);
             }
-        }
-        else {
+        } else {
             return Err(DebuggerError::InvalidBreakpointPosition);
         }
-        file.breakpoints
-            .borrow_mut()
-            .add_breakpoint(breakpoint);
+        file.breakpoints.borrow_mut().add_breakpoint(breakpoint);
         Ok(())
     }
 
@@ -228,7 +229,15 @@ impl Debugger {
         }
     }
 
-    fn get_file(&self) -> DebuggerResult<&File> {
+    pub fn get_vm(&self) -> DebuggerResult<&VM> {
+        if let Some(ref vm) = self.vm {
+            Ok(vm)
+        } else {
+            Err(DebuggerError::NoRunningInstance)
+        }
+    }
+
+    pub fn get_file(&self) -> DebuggerResult<&File> {
         if let Some(ref file) = self.file {
             Ok(file)
         } else {

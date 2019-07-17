@@ -5,6 +5,7 @@ use std::ops::RangeInclusive;
 
 use failure::Error;
 use parity_wasm::elements::Type::Function;
+use colored::*;
 
 use wasmdbg::value::Value;
 use wasmdbg::vm::{CodePosition, Trap};
@@ -276,6 +277,15 @@ impl Commands {
                 .takes_args(1)
                 .requires_file(),
         );
+        commands.push(
+            Command::new("disassemble", cmd_disassemble)
+                .alias("disas")
+                .alias("disass")
+                .takes_args_range(0..=1)
+                .description("Disassemble code")
+                .help("disassemble [FUNC_INDEX]\n\nDisassemble the current function or the one with the specified index.")
+                .requires_file(),
+        );
 
         Commands { commands }
     }
@@ -517,6 +527,39 @@ fn cmd_next(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
             print_run_result(trap, dbg);
             return Ok(());
         }
+    }
+    Ok(())
+}
+
+fn cmd_disassemble(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
+    let index = match args.get(0).map(|n| n.parse()).transpose()? {
+        Some(index) => index,
+        _ => dbg.get_vm()?.ip().func_index,
+    };
+    let curr_instr_index = dbg.vm().and_then(|vm| {
+        if vm.ip().func_index == index {
+            Some(vm.ip().instr_index)
+        } else {
+            None
+        }
+    });
+    if let Some(code) = dbg
+        .get_file()?
+        .module()
+        .code_section()
+        .and_then(|c| c.bodies().get(index))
+        .map(|b| b.code().elements())
+    {
+        let max_i_len = (code.len() - 1).to_string().len();
+        for (i, instr) in code.iter().enumerate() {
+            let prefix = match curr_instr_index {
+                Some(x) if x == i => format!("=> {}:{:>02$}", index, i, max_i_len).green().to_string(),
+                _ => format!("   {}:{:>02$}", index, i, max_i_len),
+            };
+            println!("{}   {}", prefix, instr);
+        }
+    } else {
+        bail!("Invalid function index");
     }
     Ok(())
 }
