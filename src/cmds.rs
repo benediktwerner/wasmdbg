@@ -246,9 +246,9 @@ impl Commands {
         commands.push(
             Command::new("break", cmd_break)
                 .alias("b")
+                .takes_args_range(1..=2)
                 .description("Set a breakpoint")
-                .help("break FUNC_INDEX INSTRUCTION_INDEX\n\nSet a breakpoint at the specified function and instruction. Execution will pause when it reaches that instruction")
-                .takes_args(2)
+                .help("break FUNC_INDEX [INSTRUCTION_INDEX]\n\nSet a breakpoint at the specified function and instruction. If no instruction is specified the breakpoint is set to the function start. When execution reaches a breakpoint it will pause")
                 .requires_file(),
         );
         commands.push(
@@ -513,7 +513,7 @@ fn cmd_status(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
 
 fn cmd_break(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
     let func_index = args[0].parse()?;
-    let instr_index = args[1].parse()?;
+    let instr_index = args.get(1).map(|n| n.parse()).transpose()?.unwrap_or(0);
     let breakpoint = CodePosition {
         func_index,
         instr_index,
