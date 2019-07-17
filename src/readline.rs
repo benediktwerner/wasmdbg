@@ -52,7 +52,7 @@ fn complete(
 ) -> Option<Vec<Completion>> {
     match other_words.next() {
         Some(word) => match cmds.find_by_name(word) {
-            Some(cmd) if cmd.argc.start > 0 => Some(complete_path(curr_word)),
+            Some(cmd) if *cmd.argc.start() > 0 => Some(complete_path(curr_word)),
             Some(cmd) if cmd.is_subcommand() => complete(&cmd.subcommands, curr_word, other_words),
             _ => None,
         },

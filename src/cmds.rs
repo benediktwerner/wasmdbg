@@ -1,11 +1,11 @@
 extern crate wasmdbg;
 
 
-use std::ops::Range;
-
+use std::ops::RangeInclusive;
 
 use failure::Error;
 use parity_wasm::elements::Type::Function;
+
 use wasmdbg::value::Value;
 use wasmdbg::vm::{CodePosition, Trap};
 use wasmdbg::{Debugger, LoadError};
@@ -20,7 +20,7 @@ pub struct Command {
     pub help: Option<&'static str>,
     pub requires_file: bool,
     pub requires_running: bool,
-    pub argc: Range<usize>,
+    pub argc: RangeInclusive<usize>,
     pub handler: Option<fn(&mut Debugger, &[&str]) -> CmdResult>,
     pub subcommands: Commands,
 }
@@ -33,7 +33,7 @@ impl Command {
             aliases: Vec::new(),
             description: None,
             help: None,
-            argc: 0..1,
+            argc: 0..=0,
             requires_file: false,
             requires_running: false,
             subcommands: Commands {
@@ -49,7 +49,7 @@ impl Command {
             aliases: Vec::new(),
             description: None,
             help: None,
-            argc: 0..1,
+            argc: 0..=0,
             requires_file: false,
             requires_running: false,
             subcommands: Commands {
@@ -82,21 +82,21 @@ impl Command {
         }
         if let Some(handler) = self.handler {
             if !self.argc.contains(&args.len()) {
-                if self.argc.len() == 0 {
+                if *self.argc.end() == 0 {
                     println!("\"{}\" takes no arguments", self.name);
-                } else if self.argc.len() == 1 {
+                } else if (self.argc.end() - self.argc.start()) == 1 {
                     println!(
                         "\"{}\" takes exactly {} args but got {}",
                         self.name,
-                        self.argc.start,
+                        self.argc.start(),
                         args.len()
                     );
                 } else {
                     println!(
                         "\"{}\" takes between {} and {} args but got {}",
                         self.name,
-                        self.argc.start,
-                        self.argc.end - 1,
+                        self.argc.start(),
+                        self.argc.end() - 1,
                         args.len()
                     );
 
@@ -154,11 +154,11 @@ impl Command {
     }
 
     pub fn takes_args(mut self, argc: usize) -> Self {
-        self.argc = argc..argc + 1;
+        self.argc = argc..=argc + 1;
         self
     }
 
-    pub fn takes_args_range(mut self, argc: Range<usize>) -> Self {
+    pub fn takes_args_range(mut self, argc: RangeInclusive<usize>) -> Self {
         self.argc = argc;
         self
     }
@@ -227,7 +227,7 @@ impl Commands {
         commands.push(
             Command::new("call", cmd_call)
                 .description("Call a specific function in the current runtime context")
-                .takes_args_range(1..20)
+                .takes_args_range(1..=20)
                 .requires_file(),
         );
         commands.push(
@@ -248,6 +248,26 @@ impl Commands {
                 .help("break FUNC_INDEX INSTRUCTION_INDEX\n\nSet a breakpoint at the specified function and instruction. Execution will pause when it reaches that instruction")
                 .takes_args(2)
                 .requires_file(),
+        );
+        commands.push(
+            Command::new("step", cmd_step)
+                .alias("stepi")
+                .alias("s")
+                .alias("si")
+                .takes_args_range(0..=1)
+                .description("Step one instruction")
+                .help("step [N]\n\nStep exactly one or if an argument is given exactly N instructions.\nUnlike \"next\" this will enter subroutine calls.")
+                .requires_running()
+        );
+        commands.push(
+            Command::new("next", cmd_next)
+                .alias("nexti")
+                .alias("n")
+                .alias("ni")
+                .takes_args_range(0..=1)
+                .description("Step one instruction, but skip over subroutine calls")
+                .help("next [N]\n\nStep one or if an argument is given N instructions.\nUnlike \"step\" this will skip over subroutine calls.")
+                .requires_running()
         );
         commands.push(
             Command::new("delete", cmd_delete)
@@ -476,6 +496,28 @@ fn cmd_delete(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
 
 fn cmd_continue(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
     print_run_result(dbg.continue_execution()?, dbg);
+    Ok(())
+}
+
+fn cmd_step(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
+    let steps: u32 = args.get(0).map(|n| n.parse()).transpose()?.unwrap_or(1);
+    for _ in 0..steps {
+        if let Some(trap) = dbg.single_instruction()? {
+            print_run_result(trap, dbg);
+            return Ok(());
+        }
+    }
+    Ok(())
+}
+
+fn cmd_next(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
+    let steps: u32 = args.get(0).map(|n| n.parse()).transpose()?.unwrap_or(1);
+    for _ in 0..steps {
+        if let Some(trap) = dbg.next_instruction()? {
+            print_run_result(trap, dbg);
+            return Ok(());
+        }
+    }
     Ok(())
 }
 

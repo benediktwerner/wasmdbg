@@ -28,11 +28,13 @@ pub enum LoadError {
 #[derive(Debug, Fail)]
 pub enum DebuggerError {
     #[fail(display = "Failed to initialize wasm instance: {}", _0)]
-    InitError(InitError),
+    InitError(#[fail(cause)] InitError),
     #[fail(display = "No binary file loaded")]
     NoFileLoaded,
     #[fail(display = "The binary is not being run")]
     NoRunningInstance,
+    #[fail(display = "This feature is still unimplemented")]
+    Unimplemented,
 }
 
 pub type DebuggerResult<T> = Result<T, DebuggerError>;
@@ -178,6 +180,23 @@ impl Debugger {
     pub fn continue_execution(&mut self) -> DebuggerResult<Trap> {
         if let Some(ref mut vm) = self.vm {
             Ok(vm.continue_execution())
+        } else {
+            Err(DebuggerError::NoRunningInstance)
+        }
+    }
+
+    pub fn single_instruction(&mut self) -> DebuggerResult<Option<Trap>> {
+        if let Some(ref mut vm) = self.vm {
+            Ok(vm.execute_step().err())
+        } else {
+            Err(DebuggerError::NoRunningInstance)
+        }
+    }
+
+    pub fn next_instruction(&mut self) -> DebuggerResult<Option<Trap>> {
+        if let Some(ref mut vm) = self.vm {
+            // Ok(vm.execute_step_over().err())
+            Err(DebuggerError::Unimplemented)
         } else {
             Err(DebuggerError::NoRunningInstance)
         }
