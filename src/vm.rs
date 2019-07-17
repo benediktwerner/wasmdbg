@@ -793,10 +793,10 @@ impl VM {
             Instruction::F64ConvertUI64 => (),
             Instruction::F64PromoteF32 => (),
 
-            Instruction::I32ReinterpretF32 => (),
-            Instruction::I64ReinterpretF64 => (),
-            Instruction::F32ReinterpretI32 => (),
-            Instruction::F64ReinterpretI64 => (),
+            Instruction::I32ReinterpretF32 => self.unop(|x: F32| x.to_bits())?,
+            Instruction::I64ReinterpretF64 => self.unop(|x: F64| x.to_bits())?,
+            Instruction::F32ReinterpretI32 => self.unop(F32::from_bits)?,
+            Instruction::F64ReinterpretI64 => self.unop(F64::from_bits)?,
 
             Instruction::I32Extend8S => (),
             Instruction::I32Extend16S => (),
