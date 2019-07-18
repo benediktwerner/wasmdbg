@@ -16,7 +16,6 @@ lazy_static! {
     static ref HISTORY_FILE_PATH: String = shellexpand::tilde("~/.wasmdbg_history").to_string();
 }
 
-
 fn find_cmds<'a>(cmds: &'a Commands, prefix: &str) -> Vec<&'a Command> {
     cmds.commands
         .iter()

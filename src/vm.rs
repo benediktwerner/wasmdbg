@@ -1,6 +1,5 @@
 extern crate parity_wasm;
 
-
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -11,7 +10,6 @@ use parity_wasm::elements::{
 use crate::nan_preserving_float::{F32, F64};
 use crate::value::{ExtendTo, Integer, LittleEndianConvert, Number, Value, WrapTo};
 use crate::Breakpoints;
-
 
 #[derive(Debug, Fail)]
 pub enum InitError {
@@ -180,16 +178,12 @@ impl Default for TableElement {
 
 pub struct Table {
     elements: Vec<TableElement>,
-    table_type: TableType,
 }
 
 impl Table {
     fn new(table_type: TableType) -> Self {
         let elements = vec![TableElement::Null; table_type.limits().initial() as usize];
-        Table {
-            elements,
-            table_type,
-        }
+        Table { elements }
     }
 
     fn get(&self, index: u32) -> TableElement {
@@ -790,16 +784,32 @@ impl VM {
             Instruction::F64Copysign => self.binop(|a: F64, b: F64| a.copysign(b))?,
 
             Instruction::I32WrapI64 => self.unop(|x: u64| x as u32)?,
-            Instruction::I32TruncSF32 => self.unop_try(|x: F32| Ok(x.trunc_to_i32().ok_or(Trap::InvalidConversionToInt)? as u32))?,
-            Instruction::I32TruncUF32 => self.unop_try(|x: F32| x.trunc_to_u32().ok_or(Trap::InvalidConversionToInt))?,
-            Instruction::I32TruncSF64 => self.unop_try(|x: F64| Ok(x.trunc_to_i32().ok_or(Trap::InvalidConversionToInt)? as u32))?,
-            Instruction::I32TruncUF64 => self.unop_try(|x: F64| x.trunc_to_u32().ok_or(Trap::InvalidConversionToInt))?,
-            Instruction::I64ExtendSI32 => self.unop(|x: u32| -> u64 { (x as i32).extend_to()})?,
+            Instruction::I32TruncSF32 => self.unop_try(|x: F32| {
+                Ok(x.trunc_to_i32().ok_or(Trap::InvalidConversionToInt)? as u32)
+            })?,
+            Instruction::I32TruncUF32 => {
+                self.unop_try(|x: F32| x.trunc_to_u32().ok_or(Trap::InvalidConversionToInt))?
+            }
+            Instruction::I32TruncSF64 => self.unop_try(|x: F64| {
+                Ok(x.trunc_to_i32().ok_or(Trap::InvalidConversionToInt)? as u32)
+            })?,
+            Instruction::I32TruncUF64 => {
+                self.unop_try(|x: F64| x.trunc_to_u32().ok_or(Trap::InvalidConversionToInt))?
+            }
+            Instruction::I64ExtendSI32 => self.unop(|x: u32| -> u64 { (x as i32).extend_to() })?,
             Instruction::I64ExtendUI32 => self.unop(|x: u32| -> u64 { x.extend_to() })?,
-            Instruction::I64TruncSF32 => self.unop_try(|x: F32| Ok(x.trunc_to_i64().ok_or(Trap::InvalidConversionToInt)? as u64))?,
-            Instruction::I64TruncUF32 => self.unop_try(|x: F32| x.trunc_to_u64().ok_or(Trap::InvalidConversionToInt))?,
-            Instruction::I64TruncSF64 => self.unop_try(|x: F64| Ok(x.trunc_to_i64().ok_or(Trap::InvalidConversionToInt)? as u64))?,
-            Instruction::I64TruncUF64 => self.unop_try(|x: F64| x.trunc_to_u64().ok_or(Trap::InvalidConversionToInt))?,
+            Instruction::I64TruncSF32 => self.unop_try(|x: F32| {
+                Ok(x.trunc_to_i64().ok_or(Trap::InvalidConversionToInt)? as u64)
+            })?,
+            Instruction::I64TruncUF32 => {
+                self.unop_try(|x: F32| x.trunc_to_u64().ok_or(Trap::InvalidConversionToInt))?
+            }
+            Instruction::I64TruncSF64 => self.unop_try(|x: F64| {
+                Ok(x.trunc_to_i64().ok_or(Trap::InvalidConversionToInt)? as u64)
+            })?,
+            Instruction::I64TruncUF64 => {
+                self.unop_try(|x: F64| x.trunc_to_u64().ok_or(Trap::InvalidConversionToInt))?
+            }
             Instruction::F32ConvertSI32 => self.unop(|x: u32| x as i32 as f32)?,
             Instruction::F32ConvertUI32 => self.unop(|x: u32| x as f32)?,
             Instruction::F32ConvertSI64 => self.unop(|x: u64| x as i64 as f32)?,

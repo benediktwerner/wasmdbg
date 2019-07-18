@@ -2,7 +2,6 @@
 extern crate failure;
 extern crate parity_wasm;
 
-
 use std::cell::{Ref, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -15,7 +14,6 @@ pub mod value;
 pub mod vm;
 use value::Value;
 use vm::{CodePosition, InitError, Trap, VM};
-
 
 #[derive(Debug, Fail)]
 pub enum LoadError {
@@ -189,28 +187,16 @@ impl Debugger {
     }
 
     pub fn continue_execution(&mut self) -> DebuggerResult<Trap> {
-        if let Some(ref mut vm) = self.vm {
-            Ok(vm.continue_execution())
-        } else {
-            Err(DebuggerError::NoRunningInstance)
-        }
+        Ok(self.get_vm_mut()?.continue_execution())
     }
 
     pub fn single_instruction(&mut self) -> DebuggerResult<Option<Trap>> {
-        if let Some(ref mut vm) = self.vm {
-            Ok(vm.execute_step().err())
-        } else {
-            Err(DebuggerError::NoRunningInstance)
-        }
+        Ok(self.get_vm_mut()?.execute_step().err())
     }
 
     pub fn next_instruction(&mut self) -> DebuggerResult<Option<Trap>> {
-        if let Some(ref mut vm) = self.vm {
-            // Ok(vm.execute_step_over().err())
-            Err(DebuggerError::Unimplemented)
-        } else {
-            Err(DebuggerError::NoRunningInstance)
-        }
+        // Ok(self.get_vm()?.execute_step_over().err())
+        Err(DebuggerError::Unimplemented)
     }
 
     fn create_vm(&mut self) -> DebuggerResult<&mut VM> {
@@ -231,6 +217,14 @@ impl Debugger {
 
     pub fn get_vm(&self) -> DebuggerResult<&VM> {
         if let Some(ref vm) = self.vm {
+            Ok(vm)
+        } else {
+            Err(DebuggerError::NoRunningInstance)
+        }
+    }
+
+    fn get_vm_mut(&mut self) -> DebuggerResult<&mut VM> {
+        if let Some(ref mut vm) = self.vm {
             Ok(vm)
         } else {
             Err(DebuggerError::NoRunningInstance)

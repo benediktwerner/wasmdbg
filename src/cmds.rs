@@ -1,19 +1,17 @@
-extern crate wasmdbg;
 extern crate terminal_size;
-
+extern crate wasmdbg;
 
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
-use terminal_size::{Width, terminal_size};
+use colored::*;
 use failure::Error;
 use parity_wasm::elements::{Instruction, Type::Function};
-use colored::*;
+use terminal_size::{terminal_size, Width};
 
 use wasmdbg::value::Value;
 use wasmdbg::vm::{CodePosition, Trap};
 use wasmdbg::{Debugger, LoadError};
-
 
 type CmdResult = Result<(), Error>;
 
@@ -103,7 +101,6 @@ impl Command {
                         self.argc.end() - 1,
                         args.len()
                     );
-
                 }
                 return;
             }
@@ -335,8 +332,7 @@ impl CommandHandler {
                     None => println!("Unknown command: \"{}\". Try \"help\".", cmd_name),
                 },
             }
-        }
-        else {
+        } else {
             if let Some(last_line) = self.last_line.clone() {
                 self.handle_line(dbg, &last_line);
             }
@@ -581,8 +577,7 @@ fn cmd_disassemble(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
             };
             let end = start + DISASSEMBLY_DEFAULT_MAX_LINES;
             print_disassembly(dbg, CodePosition::new(index, start), &code[start..end]);
-        }
-        else {
+        } else {
             print_disassembly(dbg, CodePosition::new(index, 0), code);
         }
     } else {
@@ -599,15 +594,16 @@ fn print_disassembly(dbg: &Debugger, start: CodePosition, instrs: &[Instruction]
             None
         }
     });
-    let CodePosition {func_index, instr_index }  = start;
-    let max_index_len = (instr_index + instrs.len() - 1).to_string().len();
+    let max_index_len = (start.instr_index + instrs.len() - 1).to_string().len();
     for (i, instr) in instrs.iter().enumerate() {
-        let index = instr_index + i;
-        let prefix = match curr_instr_index {
-            Some(x) if x == index => format!("=> {}:{:>02$}", func_index, index, max_index_len).green().to_string(),
-            _ => format!("   {}:{:>02$}", func_index, index, max_index_len),
-        };
-        println!("{}   {}", prefix, instr);
+        let instr_index = start.instr_index + i;
+        let addr_str = format!("{}:{:>02$}", start.func_index, instr_index, max_index_len);
+        if curr_instr_index.map_or(false, |i| i == instr_index) {
+            println!("=> {}   {}", addr_str.green(), instr);
+        }
+        else {
+            println!("   {}   {}", addr_str, instr);
+        }
     }
 }
 
@@ -617,7 +613,10 @@ fn print_header(text: &str) {
         None => 80,
     };
     let line_length = terminal_width - text.len() - 8;
-    println!("{}", format!("──[ {} ]──{:─<2$}", text, "", line_length).blue())
+    println!(
+        "{}",
+        format!("──[ {} ]──{:─<2$}", text, "", line_length).blue()
+    )
 }
 
 fn print_context(dbg: &mut Debugger) -> CmdResult {
@@ -636,15 +635,14 @@ fn print_run_result(trap: Trap, dbg: &mut Debugger) -> CmdResult {
         Trap::ExecutionFinished => {
             if let Some(result) = dbg.get_vm()?.value_stack().first() {
                 println!("Finished execution => {:?}", result);
-            }
-            else {
+            } else {
                 println!("Finished execution")
             }
         }
         Trap::BreakpointReached(index) => {
             println!("Reached breakpoint {}", index);
             print_context(dbg)?;
-        },
+        }
         _ => println!("Trap: {}", trap),
     }
     Ok(())

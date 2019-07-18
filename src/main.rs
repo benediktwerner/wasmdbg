@@ -16,12 +16,10 @@ use wasmdbg::Debugger;
 mod cmds;
 mod readline;
 
-use cmds::{load_file, Commands, CommandHandler};
+use cmds::{load_file, CommandHandler, Commands};
 use readline::Readline;
 
-
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 
 fn main() {
     let matches = App::new("wasmdbg")

@@ -1,10 +1,9 @@
 use std::any::Any;
 
-use parity_wasm::elements::ValueType;
 use crate::nan_preserving_float::{F32, F64};
 use crate::vm::{Trap, VMResult};
+use parity_wasm::elements::ValueType;
 use std::str::FromStr;
-
 
 #[derive(Clone, Copy, Debug)]
 pub enum Value {
@@ -133,7 +132,6 @@ impl_number!(F32, F32);
 impl_number!(F64, F64);
 impl_number!(u128, V128);
 
-
 pub trait Integer<T> {
     fn leading_zeros(self) -> T;
     fn trailing_zeros(self) -> T;
@@ -189,7 +187,6 @@ impl_integer!(i32);
 impl_integer!(u32);
 impl_integer!(i64);
 impl_integer!(u64);
-
 
 pub trait LittleEndianConvert: Sized {
     fn from_little_endian(buffer: &[u8]) -> Self;
@@ -258,7 +255,6 @@ impl_little_endian_convert_float!(f64, u64);
 impl_little_endian_convert_float!(F32, u32);
 impl_little_endian_convert_float!(F64, u64);
 
-
 pub trait ExtendTo<T> {
     fn extend_to(self) -> T;
 }
@@ -284,7 +280,6 @@ impl_extend_to!(i16, u64);
 impl_extend_to!(u16, u64);
 impl_extend_to!(i32, u64);
 impl_extend_to!(u32, u64);
-
 
 pub trait WrapTo<T> {
     fn wrap_to(self) -> T;
