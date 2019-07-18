@@ -579,6 +579,7 @@ impl VM {
     fn execute_step_internal(&mut self) -> VMResult<()> {
         let func = self.module.get_func(self.ip.func_index).unwrap();
         let instr = func.code().elements()[self.ip.instr_index as usize].clone();
+        println!("{} {}", self.ip, instr);
         self.ip.instr_index += 1;
 
         match instr {
