@@ -595,7 +595,7 @@ impl VM {
             Instruction::Else => self.branch(0)?,
             Instruction::End => {
                 if let Some(Label::Return) = self.label_stack.pop() {
-                    if !self.label_stack().is_empty() {
+                    if !self.label_stack.is_empty() {
                         let frame = self.function_stack.pop().unwrap();
                         self.ip = frame.ret_addr;
                     }
@@ -615,10 +615,15 @@ impl VM {
                     .unwrap_or(&table_data.default);
                 self.branch(*depth)?;
             }
-            Instruction::Return => {
-                let frame = self.function_stack.pop().unwrap();
-                self.ip = frame.ret_addr;
-            }
+            Instruction::Return => loop {
+                if let Some(Label::Return) = self.label_stack.pop() {
+                    if !self.label_stack.is_empty() {
+                        let frame = self.function_stack.pop().unwrap();
+                        self.ip = frame.ret_addr;
+                        break;
+                    }
+                }
+            },
 
             // Calls
             Instruction::Call(index) => self.call(index)?,
