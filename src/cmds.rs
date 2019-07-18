@@ -247,11 +247,13 @@ impl Commands {
         );
         commands.push(
             Command::new("backtrace", cmd_backtrace)
+                .takes_args_range(0..=1)
                 .description("Print a function backtrace")
                 .requires_running(),
         );
         commands.push(
             Command::new("labels", cmd_labels)
+                .takes_args_range(0..=1)
                 .description("Print the current label stack")
                 .requires_running(),
         );
@@ -571,12 +573,23 @@ fn cmd_continue(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
     print_run_result(dbg.continue_execution()?, dbg)
 }
 
-fn cmd_backtrace(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
-    // TODO: limit output length
+fn cmd_backtrace(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
+    let mut max_count = if let Some(count) = args.get(0) {
+        if count == &"all" {
+            usize::max_value()
+        } else {
+            count.parse()?
+        }
+    } else {
+        5
+    };
     let backtrace = dbg.backtrace()?;
+    if backtrace.len() < max_count {
+        max_count = backtrace.len();
+    }
     if let Some(curr_func) = backtrace.first() {
         println!("=> f {:<10}{}", curr_func.func_index, curr_func.instr_index);
-        for func in &backtrace[1..] {
+        for func in &backtrace[1..max_count] {
             println!("   f {:<10}{}", func.func_index, func.instr_index);
         }
     } else {
@@ -585,9 +598,21 @@ fn cmd_backtrace(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_labels(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
-    // TODO: limit output length
-    for label in dbg.get_vm()?.label_stack() {
+fn cmd_labels(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
+    let mut max_count = if let Some(count) = args.get(0) {
+        if count == &"all" {
+            usize::max_value()
+        } else {
+            count.parse()?
+        }
+    } else {
+        5
+    };
+    let labels = dbg.get_vm()?.label_stack();
+    if labels.len() < max_count {
+        max_count = labels.len();
+    }
+    for label in &labels[..max_count] {
         // TODO: Print labels properly
         println!("{:?}", label);
     }
