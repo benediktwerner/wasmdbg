@@ -612,7 +612,7 @@ fn cmd_labels(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
     if labels.len() < max_count {
         max_count = labels.len();
     }
-    for label in &labels[..max_count] {
+    for label in labels[labels.len()-max_count..].iter().rev() {
         // TODO: Print labels properly
         println!("{:?}", label);
     }
