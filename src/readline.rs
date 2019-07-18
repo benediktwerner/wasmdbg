@@ -91,7 +91,9 @@ impl Readline {
             match self.interface.read_line() {
                 Ok(result) => match result {
                     ReadResult::Input(line) => {
-                        self.interface.add_history_unique(line.clone());
+                        if line != "" {
+                            self.interface.add_history_unique(line.clone());
+                        }
                         return Some(line);
                     }
                     ReadResult::Eof => return None,
