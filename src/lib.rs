@@ -235,8 +235,7 @@ impl Debugger {
     }
 
     pub fn next_instruction(&mut self) -> DebuggerResult<Option<Trap>> {
-        // Ok(self.get_vm()?.execute_step_over().err())
-        Err(DebuggerError::Unimplemented)
+        Ok(self.get_vm_mut()?.execute_step_over().err())
     }
 
     fn create_vm(&mut self) -> DebuggerResult<&mut VM> {

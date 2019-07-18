@@ -1,7 +1,6 @@
 show globals
 show memory
 show all sections (types, inits, etc.)
-step over
 try out a ctf binary
 format disassembly
 read debug symbols
