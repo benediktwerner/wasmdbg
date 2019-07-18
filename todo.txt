@@ -5,9 +5,8 @@ try out a ctf binary
 format disassembly
 read debug symbols
 use debug symbols for function names
-implement select instruction
 Rainbow color theme
-finish (exit function)
+display values as signed and unsigned and hex and decimal
 
 Ideas:
 record execution
