@@ -554,7 +554,7 @@ fn cmd_break(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
         instr_index,
     };
     let index = dbg.add_breakpoint(breakpoint)?;
-    println!("Set breakpoit {} at {}:{}", index, func_index, instr_index);
+    println!("Set breakpoint {} at {}:{}", index, func_index, instr_index);
     Ok(())
 }
 
