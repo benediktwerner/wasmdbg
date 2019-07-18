@@ -595,14 +595,24 @@ fn print_disassembly(dbg: &Debugger, start: CodePosition, instrs: &[Instruction]
         }
     });
     let max_index_len = (start.instr_index + instrs.len() - 1).to_string().len();
+    let breakpoints = dbg.breakpoints().ok();
     for (i, instr) in instrs.iter().enumerate() {
         let instr_index = start.instr_index + i;
         let addr_str = format!("{}:{:>02$}", start.func_index, instr_index, max_index_len);
+        let breakpoint = match breakpoints {
+            Some(ref breakpoints) => {
+                breakpoints.find(&CodePosition::new(start.func_index, instr_index))
+            }
+            None => None,
+        };
+        let breakpoint_str = match breakpoint {
+            Some(_) => "*".red().to_string(),
+            None => " ".to_string(),
+        };
         if curr_instr_index.map_or(false, |i| i == instr_index) {
-            println!("=> {}   {}", addr_str.green(), instr);
-        }
-        else {
-            println!("   {}   {}", addr_str, instr);
+            println!("=> {}{}   {}", breakpoint_str, addr_str.green(), instr);
+        } else {
+            println!("   {}{}   {}", breakpoint_str, addr_str, instr);
         }
     }
 }

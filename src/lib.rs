@@ -54,6 +54,10 @@ impl Breakpoints {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.breakpoint_indices.len()
+    }
+
     pub fn find(&self, pos: &CodePosition) -> Option<u32> {
         if self.breakpoints.contains(pos) {
             for (index, breakpoint) in self.breakpoint_indices.iter() {
@@ -80,6 +84,19 @@ impl Breakpoints {
         }
         false
     }
+
+    pub fn iter(&self) -> <&Self as std::iter::IntoIterator>::IntoIter {
+        self.into_iter()
+    }
+}
+
+impl<'a> std::iter::IntoIterator for &'a Breakpoints {
+    type Item = (&'a u32, &'a CodePosition);
+    type IntoIter = <&'a HashMap<u32, CodePosition> as std::iter::IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        (&self.breakpoint_indices).into_iter()
+    }
 }
 
 pub struct File {
@@ -101,6 +118,10 @@ impl File {
 
     pub fn module(&self) -> &Module {
         &self.module
+    }
+
+    pub fn breakpoints(&self) -> Ref<'_, Breakpoints> {
+        self.breakpoints.borrow()
     }
 }
 
@@ -142,10 +163,8 @@ impl Debugger {
         Ok(())
     }
 
-    pub fn breakpoints(&self) -> DebuggerResult<Ref<'_, HashMap<u32, CodePosition>>> {
-        Ok(Ref::map(self.get_file()?.breakpoints.borrow(), |b| {
-            &b.breakpoint_indices
-        }))
+    pub fn breakpoints(&self) -> DebuggerResult<Ref<'_, Breakpoints>> {
+        Ok(self.get_file()?.breakpoints())
     }
 
     pub fn add_breakpoint(&mut self, breakpoint: CodePosition) -> DebuggerResult<()> {
