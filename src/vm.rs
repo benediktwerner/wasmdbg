@@ -4,7 +4,8 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use parity_wasm::elements::{
-    FuncBody, InitExpr, Instruction, Module, ResizableLimits, TableType, Type::Function, ValueType,
+    FuncBody, FunctionType, InitExpr, Instruction, Module, ResizableLimits, TableType,
+    Type::Function, ValueType,
 };
 
 use crate::nan_preserving_float::{F32, F64};
@@ -56,6 +57,8 @@ pub enum Trap {
     IndirectCalleeAbsent,
     #[fail(display = "Indirect call type mismatch")]
     IndirectCallTypeMismatch,
+    #[fail(display = "No function with index {}", _0)]
+    NoFunctionWithIndex(u32),
     #[fail(display = "No start function")]
     NoStartFunction,
     #[fail(display = "Reached breakpoint {}", _0)]
@@ -66,12 +69,12 @@ pub type VMResult<T> = Result<T, Trap>;
 
 #[derive(Default, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct CodePosition {
-    pub func_index: usize,
-    pub instr_index: usize,
+    pub func_index: u32,
+    pub instr_index: u32,
 }
 
 impl CodePosition {
-    pub fn new(func_index: usize, instr_index: usize) -> Self {
+    pub fn new(func_index: u32, instr_index: u32) -> Self {
         CodePosition {
             func_index,
             instr_index,
@@ -80,7 +83,7 @@ impl CodePosition {
 }
 
 enum Label {
-    Bound(usize),
+    Bound(u32),
     Unbound,
 }
 
@@ -312,19 +315,17 @@ impl VM {
         Err(Trap::NoFunctionFrame)
     }
 
-    fn curr_func(&self) -> &FuncBody {
-        &self.module.code_section().unwrap().bodies()[self.ip.func_index]
-    }
-
-    fn curr_code(&self) -> &[Instruction] {
-        self.curr_func().code().elements()
+    fn curr_func(&self) -> VMResult<&FuncBody> {
+        self.module
+            .get_func(self.ip.func_index)
+            .ok_or_else(|| Trap::NoFunctionWithIndex(self.ip.func_index))
     }
 
     fn default_table(&self) -> VMResult<&Table> {
         self.table.as_ref().ok_or(Trap::NoTable)
     }
 
-    fn branch(&mut self, mut index: u32) {
+    fn branch(&mut self, mut index: u32) -> VMResult<()> {
         self.label_stack
             .truncate(self.label_stack.len() - index as usize);
         match self.label_stack.last().unwrap() {
@@ -332,7 +333,8 @@ impl VM {
             Label::Unbound => {
                 index += 1;
                 loop {
-                    match self.curr_code()[self.ip.instr_index] {
+                    let curr_func_code = self.curr_func()?.code().elements();
+                    match curr_func_code[self.ip.instr_index as usize] {
                         Instruction::Block(_) => index += 1,
                         Instruction::Loop(_) => index += 1,
                         Instruction::If(_) => index += 1,
@@ -348,12 +350,14 @@ impl VM {
                 }
             }
         }
+        Ok(())
     }
 
-    fn branch_else(&mut self) {
+    fn branch_else(&mut self) -> VMResult<()> {
         let mut index = 1;
         loop {
-            match self.curr_code()[self.ip.instr_index] {
+            let curr_func_code = self.curr_func()?.code().elements();
+            match curr_func_code[self.ip.instr_index as usize] {
                 Instruction::Block(_) => index += 1,
                 Instruction::Loop(_) => index += 1,
                 Instruction::If(_) => index += 1,
@@ -373,6 +377,7 @@ impl VM {
 
             self.ip.instr_index += 1;
         }
+        Ok(())
     }
 
     fn perform_load<T: Number + LittleEndianConvert>(&mut self, offset: u32) -> VMResult<()> {
@@ -443,9 +448,10 @@ impl VM {
     }
 
     fn call(&mut self, index: u32) -> VMResult<()> {
-        let func_type =
-            self.module.function_section().unwrap().entries()[index as usize].type_ref();
-        let Function(func_type) = &self.module.type_section().unwrap().types()[func_type as usize];
+        let func_type = self
+            .module
+            .get_func_type(index)
+            .ok_or_else(|| Trap::NoFunctionWithIndex(index))?;
 
         let params_count = func_type.params().len();
         let mut locals = Vec::new();
@@ -455,7 +461,10 @@ impl VM {
         }
         locals.reverse();
 
-        let func = &self.module.code_section().unwrap().bodies()[index as usize];
+        let func = self
+            .module
+            .get_func(index)
+            .ok_or_else(|| Trap::NoFunctionWithIndex(index))?;
         for local in func.locals() {
             let default_val = Value::default(local.value_type());
             for _ in 0..local.count() {
@@ -469,7 +478,7 @@ impl VM {
         });
 
         self.ip = CodePosition {
-            func_index: index as usize,
+            func_index: index,
             instr_index: 0,
         };
 
@@ -500,7 +509,7 @@ impl VM {
         if let Err(trap) = self.call(index) {
             return trap;
         }
-        if let Some(index) = self.breakpoints.borrow().find(&self.ip) {
+        if let Some(index) = self.breakpoints.borrow().find(self.ip) {
             return Trap::BreakpointReached(index);
         }
         self.continue_execution()
@@ -542,8 +551,8 @@ impl VM {
 
     #[allow(clippy::float_cmp, clippy::redundant_closure)]
     fn execute_step_internal(&mut self) -> VMResult<()> {
-        let func = self.curr_func();
-        let instr = func.code().elements()[self.ip.instr_index].clone();
+        let func = self.module.get_func(self.ip.func_index).unwrap();
+        let instr = func.code().elements()[self.ip.instr_index as usize].clone();
         self.ip.instr_index += 1;
 
         match instr {
@@ -554,10 +563,10 @@ impl VM {
             Instruction::If(_) => {
                 self.label_stack.push(Label::Unbound);
                 if self.pop_expect::<u32>()? == 0 {
-                    self.branch_else();
+                    self.branch_else()?;
                 }
             }
-            Instruction::Else => self.branch(0),
+            Instruction::Else => self.branch(0)?,
             Instruction::End => {
                 if self.label_stack.pop().is_none() {
                     let frame = self.function_stack.pop().unwrap();
@@ -566,10 +575,10 @@ impl VM {
                     }
                 }
             }
-            Instruction::Br(index) => self.branch(index),
+            Instruction::Br(index) => self.branch(index)?,
             Instruction::BrIf(index) => {
                 if self.pop_expect::<u32>()? != 0 {
-                    self.branch(index);
+                    self.branch(index)?;
                 }
             }
             Instruction::BrTable(table_data) => {
@@ -578,7 +587,7 @@ impl VM {
                     .table
                     .get(index as usize)
                     .unwrap_or(&table_data.default);
-                self.branch(*depth);
+                self.branch(*depth)?;
             }
             Instruction::Return => {
                 let frame = self.function_stack.pop().unwrap();
@@ -593,9 +602,10 @@ impl VM {
                     TableElement::Func(func_index) => func_index,
                     _ => return Err(Trap::IndirectCalleeAbsent),
                 };
-                let func_type = self.module.function_section().unwrap().entries()
-                    [func_index as usize]
-                    .type_ref();
+                let func_type = self
+                    .module
+                    .get_func_type_ref(func_index)
+                    .ok_or_else(|| Trap::NoFunctionWithIndex(func_index))?;
 
                 if func_type != signature {
                     return Err(Trap::IndirectCallTypeMismatch);
@@ -849,7 +859,7 @@ impl VM {
             return Err(Trap::ExecutionFinished);
         }
 
-        if let Some(index) = self.breakpoints.borrow().find(&self.ip) {
+        if let Some(index) = self.breakpoints.borrow().find(self.ip) {
             return Err(Trap::BreakpointReached(index));
         }
 
@@ -862,5 +872,39 @@ fn bool_val(val: bool) -> u32 {
     match val {
         true => 1,
         false => 0,
+    }
+}
+
+pub trait ModuleHelper {
+    fn calc_func_index(&self, index: u32) -> Option<usize>;
+    fn get_func_type_ref(&self, index: u32) -> Option<u32>;
+    fn get_func_type(&self, index: u32) -> Option<&FunctionType>;
+    fn get_func(&self, index: u32) -> Option<&FuncBody>;
+}
+
+impl ModuleHelper for Module {
+    fn calc_func_index(&self, index: u32) -> Option<usize> {
+        let imported_funcs = self
+            .import_section()
+            .map(|s| s.entries().len())
+            .unwrap_or(0);
+        if (index as usize) < imported_funcs {
+            return None;
+        }
+        Some(index as usize - imported_funcs)
+    }
+
+    fn get_func_type_ref(&self, index: u32) -> Option<u32> {
+        Some(self.function_section()?.entries()[self.calc_func_index(index)?].type_ref())
+    }
+
+    fn get_func_type(&self, index: u32) -> Option<&FunctionType> {
+        let Function(ref func_type) =
+            self.type_section()?.types()[self.get_func_type_ref(index)? as usize];
+        Some(func_type)
+    }
+
+    fn get_func(&self, index: u32) -> Option<&FuncBody> {
+        Some(&self.code_section()?.bodies()[self.calc_func_index(index)?])
     }
 }

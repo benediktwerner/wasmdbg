@@ -8,10 +8,10 @@ use std::sync::Arc;
 
 use colored::*;
 use failure::Error;
-use parity_wasm::elements::{Instruction, Type::Function};
+use parity_wasm::elements::Instruction;
 
 use wasmdbg::value::Value;
-use wasmdbg::vm::{CodePosition, Trap};
+use wasmdbg::vm::{CodePosition, ModuleHelper, Trap};
 use wasmdbg::{Debugger, LoadError};
 
 use crate::utils::{print_header, print_line};
@@ -481,15 +481,9 @@ fn cmd_call(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
     let func_index = args[0].parse()?;
     let args = &args[1..];
 
-    let func_section = module
-        .function_section()
-        .ok_or_else(|| format_err!("No function section found"))?;
-    let func = func_section
-        .entries()
-        .get(func_index as usize)
+    let func_type = module
+        .get_func_type(func_index)
         .ok_or_else(|| format_err!("No function with index {}", func_index))?;
-    let func_type = func.type_ref();
-    let Function(func_type) = &module.type_section().unwrap().types()[func_type as usize];
 
     if args.len() != func_type.params().len() {
         bail!(
@@ -615,19 +609,22 @@ fn cmd_disassemble(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
     if let Some(code) = dbg
         .get_file()?
         .module()
-        .code_section()
-        .and_then(|c| c.bodies().get(index))
+        .get_func(index)
         .map(|b| b.code().elements())
     {
         if args.is_empty() && code.len() > DISASSEMBLY_DEFAULT_MAX_LINES {
             let ip = dbg.get_vm()?.ip();
-            let start = if ip.instr_index > code.len() - DISASSEMBLY_DEFAULT_MAX_LINES {
+            let start = if ip.instr_index as usize > code.len() - DISASSEMBLY_DEFAULT_MAX_LINES {
                 code.len() - DISASSEMBLY_DEFAULT_MAX_LINES
             } else {
-                ip.instr_index.max(2) - 2
+                ip.instr_index.max(2) as usize - 2
             };
             let end = start + DISASSEMBLY_DEFAULT_MAX_LINES;
-            print_disassembly(dbg, CodePosition::new(index, start), &code[start..end]);
+            print_disassembly(
+                dbg,
+                CodePosition::new(index, start as u32),
+                &code[start..end],
+            );
         } else {
             print_disassembly(dbg, CodePosition::new(index, 0), code);
         }
@@ -645,14 +642,16 @@ fn print_disassembly(dbg: &Debugger, start: CodePosition, instrs: &[Instruction]
             None
         }
     });
-    let max_index_len = (start.instr_index + instrs.len() - 1).to_string().len();
+    let max_index_len = (start.instr_index as usize + instrs.len() - 1)
+        .to_string()
+        .len();
     let breakpoints = dbg.breakpoints().ok();
     for (i, instr) in instrs.iter().enumerate() {
-        let instr_index = start.instr_index + i;
+        let instr_index = start.instr_index + i as u32;
         let addr_str = format!("{}:{:>02$}", start.func_index, instr_index, max_index_len);
         let breakpoint = match breakpoints {
             Some(ref breakpoints) => {
-                breakpoints.find(&CodePosition::new(start.func_index, instr_index))
+                breakpoints.find(CodePosition::new(start.func_index, instr_index))
             }
             None => None,
         };

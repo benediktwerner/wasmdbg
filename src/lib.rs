@@ -13,7 +13,7 @@ pub mod nan_preserving_float;
 pub mod value;
 pub mod vm;
 use value::Value;
-use vm::{CodePosition, InitError, Trap, VM};
+use vm::{CodePosition, InitError, ModuleHelper, Trap, VM};
 
 #[derive(Debug, Fail)]
 pub enum LoadError {
@@ -62,10 +62,10 @@ impl Breakpoints {
         self.breakpoint_indices.len()
     }
 
-    pub fn find(&self, pos: &CodePosition) -> Option<u32> {
-        if self.breakpoints.contains(pos) {
+    pub fn find(&self, pos: CodePosition) -> Option<u32> {
+        if self.breakpoints.contains(&pos) {
             for (index, breakpoint) in self.breakpoint_indices.iter() {
-                if breakpoint == pos {
+                if *breakpoint == pos {
                     return Some(*index);
                 }
             }
@@ -191,12 +191,13 @@ impl Debugger {
 
     pub fn add_breakpoint(&mut self, breakpoint: CodePosition) -> DebuggerResult<u32> {
         let file = self.get_file_mut()?;
-        if let Some(func) = file
-            .module()
-            .code_section()
-            .and_then(|c| c.bodies().get(breakpoint.func_index))
-        {
-            if func.code().elements().get(breakpoint.instr_index).is_none() {
+        if let Some(func) = file.module().get_func(breakpoint.func_index) {
+            if func
+                .code()
+                .elements()
+                .get(breakpoint.instr_index as usize)
+                .is_none()
+            {
                 return Err(DebuggerError::InvalidBreakpointPosition);
             }
         } else {
