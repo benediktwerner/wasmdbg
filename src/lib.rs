@@ -54,6 +54,10 @@ impl Breakpoints {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.breakpoint_indices.is_empty()
+    }
+
     pub fn len(&self) -> usize {
         self.breakpoint_indices.len()
     }
@@ -95,7 +99,7 @@ impl<'a> std::iter::IntoIterator for &'a Breakpoints {
     type IntoIter = <&'a HashMap<u32, CodePosition> as std::iter::IntoIterator>::IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        (&self.breakpoint_indices).into_iter()
+        self.breakpoint_indices.iter()
     }
 }
 

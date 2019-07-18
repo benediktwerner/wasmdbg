@@ -155,6 +155,7 @@ macro_rules! float {
                 Self::from_bits((self.0 & !$sign_bit) | sign)
             }
 
+            #[allow(clippy::cast_lossless)]
             pub fn trunc_to_i32(self) -> Option<i32> {
                 let self_float = self.to_float();
                 if self.is_nan()
@@ -179,6 +180,7 @@ macro_rules! float {
                 }
             }
 
+            #[allow(clippy::cast_lossless)]
             pub fn trunc_to_u32(self) -> Option<u32> {
                 let self_float = self.to_float();
                 if self.is_nan()

@@ -526,7 +526,7 @@ impl VM {
         Ok(())
     }
 
-    #[allow(clippy::float_cmp)]
+    #[allow(clippy::float_cmp, clippy::redundant_closure)]
     fn execute_step_internal(&mut self) -> VMResult<()> {
         let func = self.curr_func();
         let instr = func.code().elements()[self.ip.instr_index].clone();
@@ -815,11 +815,11 @@ impl VM {
             Instruction::F32ConvertSI64 => self.unop(|x: u64| x as i64 as f32)?,
             Instruction::F32ConvertUI64 => self.unop(|x: u64| x as f32)?,
             Instruction::F32DemoteF64 => self.unop(|x: f64| x as f32)?,
-            Instruction::F64ConvertSI32 => self.unop(|x: u32| x as i32 as f64)?,
-            Instruction::F64ConvertUI32 => self.unop(|x: u32| x as f64)?,
+            Instruction::F64ConvertSI32 => self.unop(|x: u32| f64::from(x as i32))?,
+            Instruction::F64ConvertUI32 => self.unop(|x: u32| f64::from(x))?,
             Instruction::F64ConvertSI64 => self.unop(|x: u64| x as i64 as f64)?,
             Instruction::F64ConvertUI64 => self.unop(|x: u64| x as f64)?,
-            Instruction::F64PromoteF32 => self.unop(|x: f32| x as f64)?,
+            Instruction::F64PromoteF32 => self.unop(|x: f32| f64::from(x))?,
 
             Instruction::I32ReinterpretF32 => self.unop(|x: F32| x.to_bits())?,
             Instruction::I64ReinterpretF64 => self.unop(|x: F64| x.to_bits())?,
