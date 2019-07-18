@@ -744,9 +744,9 @@ impl VM {
             Instruction::I32Clz => self.unop(|x: u32| x.leading_zeros())?,
             Instruction::I32Ctz => self.unop(|x: u32| x.trailing_zeros())?,
             Instruction::I32Popcnt => self.unop(|x: u32| x.count_ones())?,
-            Instruction::I32Add => self.binop(|a: u32, b: u32| a + b)?,
-            Instruction::I32Sub => self.binop(|a: u32, b: u32| a - b)?,
-            Instruction::I32Mul => self.binop(|a: u32, b: u32| a * b)?,
+            Instruction::I32Add => self.binop(|a: u32, b: u32| a.wrapping_add(b))?,
+            Instruction::I32Sub => self.binop(|a: u32, b: u32| a.wrapping_sub(b))?,
+            Instruction::I32Mul => self.binop(|a: u32, b: u32| a.wrapping_mul(b))?,
             Instruction::I32DivS => {
                 self.binop_try(|a: u32, b: u32| Ok((a as i32).div(b as i32)? as u32))?
             }
@@ -758,7 +758,7 @@ impl VM {
             Instruction::I32And => self.binop(|a: u32, b: u32| a & b)?,
             Instruction::I32Or => self.binop(|a: u32, b: u32| a | b)?,
             Instruction::I32Xor => self.binop(|a: u32, b: u32| a ^ b)?,
-            Instruction::I32Shl => self.binop(|a: u32, b: u32| a << b)?,
+            Instruction::I32Shl => self.binop(|a: u32, b: u32| a.wrapping_shl(b))?,
             Instruction::I32ShrS => self.binop(|a: u32, b: u32| (a as i32 >> b) as u32)?,
             Instruction::I32ShrU => self.binop(|a: u32, b: u32| a >> b)?,
             Instruction::I32Rotl => self.binop(|a: u32, b: u32| a.rotate_left(b))?,
@@ -767,9 +767,9 @@ impl VM {
             Instruction::I64Clz => self.unop(|x: u64| x.leading_zeros())?,
             Instruction::I64Ctz => self.unop(|x: u64| x.trailing_zeros())?,
             Instruction::I64Popcnt => self.unop(|x: u64| x.count_ones())?,
-            Instruction::I64Add => self.binop(|a: u64, b: u64| a + b)?,
-            Instruction::I64Sub => self.binop(|a: u64, b: u64| a - b)?,
-            Instruction::I64Mul => self.binop(|a: u64, b: u64| a * b)?,
+            Instruction::I64Add => self.binop(|a: u64, b: u64| a.wrapping_add(b))?,
+            Instruction::I64Sub => self.binop(|a: u64, b: u64| a.wrapping_sub(b))?,
+            Instruction::I64Mul => self.binop(|a: u64, b: u64| a.wrapping_mul(b))?,
             Instruction::I64DivS => {
                 self.binop_try(|a: u64, b: u64| Ok((a as i64).div(b as i64)? as u64))?
             }
@@ -781,7 +781,7 @@ impl VM {
             Instruction::I64And => self.binop(|a: u64, b: u64| a & b)?,
             Instruction::I64Or => self.binop(|a: u64, b: u64| a | b)?,
             Instruction::I64Xor => self.binop(|a: u64, b: u64| a ^ b)?,
-            Instruction::I64Shl => self.binop(|a: u64, b: u64| a << b)?,
+            Instruction::I64Shl => self.binop(|a: u64, b: u64| a.wrapping_shl(b as u32))?,
             Instruction::I64ShrS => self.binop(|a: u64, b: u64| (a as i64 >> b) as u64)?,
             Instruction::I64ShrU => self.binop(|a: u64, b: u64| a >> b)?,
             Instruction::I64Rotl => self.binop(|a: u64, b: u64| a.rotate_left(b as u32))?,
