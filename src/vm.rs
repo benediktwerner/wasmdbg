@@ -84,6 +84,12 @@ impl CodePosition {
     }
 }
 
+impl std::fmt::Display for CodePosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.func_index, self.instr_index)
+    }
+}
+
 #[derive(Debug)]
 pub enum Label {
     Bound(u32),

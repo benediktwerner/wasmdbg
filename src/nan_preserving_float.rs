@@ -238,8 +238,8 @@ macro_rules! float {
             }
         }
 
-        impl ::core::fmt::Debug for $for {
-            fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        impl fmt::Debug for $for {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 $is::from(*self).fmt(f)
             }
         }

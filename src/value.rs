@@ -110,7 +110,7 @@ impl From<u128> for Value {
     }
 }
 
-pub trait Number: Into<Value> + Copy + Any {
+pub trait Number: Into<Value> + Copy + Any + std::fmt::Display {
     fn value_type() -> ValueType;
 }
 
