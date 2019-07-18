@@ -1,0 +1,18 @@
+function backtrace (show function stack)
+show locals
+show globals
+show memory
+show all sections (types, inits, etc.)
+step over
+try out a ctf binary
+format disassembly
+read debug symbols
+use debug symbols for function names
+implement select instruction
+Rainbow color theme
+finish (exit function)
+
+Ideas:
+.wasmdbg_init
+record execution
+python interface
