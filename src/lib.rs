@@ -74,7 +74,7 @@ impl Breakpoints {
     }
 
     fn add_breakpoint(&mut self, breakpoint: CodePosition) -> u32 {
-        self.breakpoints.insert(breakpoint.clone());
+        self.breakpoints.insert(breakpoint);
         self.breakpoint_indices
             .insert(self.next_breakpoint_index, breakpoint);
         self.next_breakpoint_index += 1;

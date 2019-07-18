@@ -64,7 +64,7 @@ pub enum Trap {
 
 pub type VMResult<T> = Result<T, Trap>;
 
-#[derive(Default, Clone, PartialEq, Eq, Hash)]
+#[derive(Default, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct CodePosition {
     pub func_index: usize,
     pub instr_index: usize,
@@ -275,7 +275,7 @@ impl VM {
     }
 
     pub fn ip(&self) -> CodePosition {
-        self.ip.clone()
+        self.ip
     }
 
     fn push(&mut self, val: Value) {
@@ -460,7 +460,7 @@ impl VM {
         }
 
         self.function_stack.push(FunctionFrame {
-            ret_addr: self.ip.clone(),
+            ret_addr: self.ip,
             locals,
         });
 
