@@ -73,11 +73,12 @@ impl Breakpoints {
         None
     }
 
-    fn add_breakpoint(&mut self, breakpoint: CodePosition) {
+    fn add_breakpoint(&mut self, breakpoint: CodePosition) -> u32 {
         self.breakpoints.insert(breakpoint.clone());
         self.breakpoint_indices
             .insert(self.next_breakpoint_index, breakpoint);
         self.next_breakpoint_index += 1;
+        self.next_breakpoint_index - 1
     }
 
     fn delete_breakpoint(&mut self, index: u32) -> bool {
@@ -171,7 +172,7 @@ impl Debugger {
         Ok(self.get_file()?.breakpoints())
     }
 
-    pub fn add_breakpoint(&mut self, breakpoint: CodePosition) -> DebuggerResult<()> {
+    pub fn add_breakpoint(&mut self, breakpoint: CodePosition) -> DebuggerResult<u32> {
         let file = self.get_file_mut()?;
         if let Some(func) = file
             .module()
@@ -184,8 +185,7 @@ impl Debugger {
         } else {
             return Err(DebuggerError::InvalidBreakpointPosition);
         }
-        file.breakpoints.borrow_mut().add_breakpoint(breakpoint);
-        Ok(())
+        Ok(file.breakpoints.borrow_mut().add_breakpoint(breakpoint))
     }
 
     pub fn delete_breakpoint(&mut self, index: u32) -> DebuggerResult<bool> {
