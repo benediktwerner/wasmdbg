@@ -642,7 +642,16 @@ impl VM {
             Instruction::Drop => {
                 self.pop()?;
             }
-            Instruction::Select => (),
+            Instruction::Select => {
+                let cond: u32 = self.pop_expect()?;
+                let val2 = self.pop()?;
+                let val1 = self.pop()?;
+                if cond != 0 {
+                    self.push(val1);
+                } else {
+                    self.push(val2);
+                }
+            }
             Instruction::GetLocal(index) => {
                 let val = self.locals()?[index as usize];
                 self.push(val);
