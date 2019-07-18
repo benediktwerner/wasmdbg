@@ -1,0 +1,2 @@
+load test.wasm
+break 1

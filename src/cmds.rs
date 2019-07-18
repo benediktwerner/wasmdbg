@@ -1,6 +1,8 @@
 extern crate terminal_size;
 extern crate wasmdbg;
 
+use std::fs::File;
+use std::io::{self, BufRead};
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 
@@ -341,6 +343,28 @@ impl CommandHandler {
 
         self.last_line = Some(line.to_string());
         false
+    }
+
+    pub fn load_init_file(&mut self, dbg: &mut Debugger, path: &str) {
+        match File::open(path) {
+            Ok(file) => {
+                for line in io::BufReader::new(file).lines() {
+                    match line {
+                        Ok(line) => {
+                            if self.handle_line(dbg, &line) {
+                                return;
+                            }
+                        }
+                        Err(error) => {
+                            println!("Failed to read \"{}\": {}", path, error);
+                            return;
+                        }
+                    }
+                }
+            }
+            Err(ref error) if error.kind() == io::ErrorKind::NotFound => (),
+            Err(error) => println!("Failed to open \"{}\": {}", path, error),
+        }
     }
 
     fn print_help(&self, cmd_name: Option<&str>) {

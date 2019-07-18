@@ -13,6 +13,5 @@ Rainbow color theme
 finish (exit function)
 
 Ideas:
-.wasmdbg_init
 record execution
 python interface

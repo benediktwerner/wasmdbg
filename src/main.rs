@@ -36,6 +36,8 @@ fn main() {
         load_file(&mut dbg, file_path);
     }
 
+    cmd_handler.load_init_file(&mut dbg, ".wasmdbg_init");
+
     while let Some(line) = rl.readline() {
         if cmd_handler.handle_line(&mut dbg, &line) {
             break;
