@@ -935,16 +935,25 @@ impl ModuleHelper for Module {
     }
 
     fn get_func_type_ref(&self, index: u32) -> Option<u32> {
-        Some(self.function_section()?.entries()[self.calc_func_index(index)?].type_ref())
+        Some(
+            self.function_section()?
+                .entries()
+                .get(self.calc_func_index(index)?)?
+                .type_ref(),
+        )
     }
 
     fn get_func_type(&self, index: u32) -> Option<&FunctionType> {
-        let Function(ref func_type) =
-            self.type_section()?.types()[self.get_func_type_ref(index)? as usize];
+        let Function(ref func_type) = self
+            .type_section()?
+            .types()
+            .get(self.get_func_type_ref(index)? as usize)?;
         Some(func_type)
     }
 
     fn get_func(&self, index: u32) -> Option<&FuncBody> {
-        Some(&self.code_section()?.bodies()[self.calc_func_index(index)?])
+        self.code_section()?
+            .bodies()
+            .get(self.calc_func_index(index)?)
     }
 }
