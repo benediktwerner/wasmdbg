@@ -251,6 +251,11 @@ impl Commands {
                 .requires_running(),
         );
         commands.push(
+            Command::new("labels", cmd_labels)
+                .description("Print the current label stack")
+                .requires_running(),
+        );
+        commands.push(
             Command::new("locals", cmd_locals)
                 .takes_args_range(0..=1)
                 .description("Print locals")
@@ -567,6 +572,7 @@ fn cmd_continue(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
 }
 
 fn cmd_backtrace(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+    // TODO: limit output length
     let backtrace = dbg.backtrace()?;
     if let Some(curr_func) = backtrace.first() {
         println!("=> f {:<10}{}", curr_func.func_index, curr_func.instr_index);
@@ -575,6 +581,15 @@ fn cmd_backtrace(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
         }
     } else {
         println!("WTF? No function backtrace...");
+    }
+    Ok(())
+}
+
+fn cmd_labels(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+    // TODO: limit output length
+    for label in dbg.get_vm()?.label_stack() {
+        // TODO: Print labels properly
+        println!("{:?}", label);
     }
     Ok(())
 }
@@ -698,8 +713,10 @@ fn print_context(dbg: &mut Debugger) -> CmdResult {
     cmd_locals(dbg, &[])?;
     print_header("DISASM");
     cmd_disassemble(dbg, &[])?;
-    print_header("STACK");
+    print_header("VALUE STACK");
     cmd_stack(dbg, &[])?;
+    print_header("LABEL STACK");
+    cmd_labels(dbg, &[])?;
     print_header("BACKTRACE");
     cmd_backtrace(dbg, &[])?;
     print_line();

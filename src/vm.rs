@@ -82,7 +82,8 @@ impl CodePosition {
     }
 }
 
-enum Label {
+#[derive(Debug)]
+pub enum Label {
     Bound(u32),
     Unbound,
 }
@@ -275,6 +276,10 @@ impl VM {
 
     pub fn function_stack(&self) -> &Vec<FunctionFrame> {
         &self.function_stack
+    }
+
+    pub fn label_stack(&self) -> &Vec<Label> {
+        &self.label_stack
     }
 
     pub fn trap(&self) -> Option<&Trap> {
