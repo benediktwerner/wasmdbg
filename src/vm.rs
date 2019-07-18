@@ -63,6 +63,8 @@ pub enum Trap {
     NoStartFunction,
     #[fail(display = "Reached breakpoint {}", _0)]
     BreakpointReached(u32),
+    #[fail(display = "Invalid branch index")]
+    InvalidBranchIndex,
 }
 
 pub type VMResult<T> = Result<T, Trap>;
@@ -86,6 +88,7 @@ impl CodePosition {
 pub enum Label {
     Bound(u32),
     Unbound,
+    Return,
 }
 
 pub struct FunctionFrame {
@@ -354,6 +357,7 @@ impl VM {
                     self.ip.instr_index += 1;
                 }
             }
+            _ => return Err(Trap::InvalidBranchIndex),
         }
         Ok(())
     }
@@ -477,6 +481,7 @@ impl VM {
             }
         }
 
+        self.label_stack.push(Label::Return);
         self.function_stack.push(FunctionFrame {
             ret_addr: self.ip,
             locals,
@@ -573,11 +578,9 @@ impl VM {
             }
             Instruction::Else => self.branch(0)?,
             Instruction::End => {
-                if self.label_stack.pop().is_none() {
+                if let Some(Label::Return) = self.label_stack.pop() {
                     let frame = self.function_stack.pop().unwrap();
-                    if !self.function_stack().is_empty() {
-                        self.ip = frame.ret_addr;
-                    }
+                    self.ip = frame.ret_addr;
                 }
             }
             Instruction::Br(index) => self.branch(index)?,
