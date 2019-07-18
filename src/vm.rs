@@ -72,6 +72,15 @@ pub struct CodePosition {
     pub instr_index: usize,
 }
 
+impl CodePosition {
+    pub fn new(func_index: usize, instr_index: usize) -> Self {
+        CodePosition {
+            func_index,
+            instr_index,
+        }
+    }
+}
+
 enum Label {
     Bound(usize),
     Unbound,

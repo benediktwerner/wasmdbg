@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use terminal_size::{Width, terminal_size};
 use failure::Error;
-use parity_wasm::elements::Type::Function;
+use parity_wasm::elements::{Instruction, Type::Function};
 use colored::*;
 
 use wasmdbg::value::Value;
@@ -558,18 +558,13 @@ fn cmd_next(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
     print_context(dbg)
 }
 
+const DISASSEMBLY_DEFAULT_MAX_LINES: usize = 20;
+
 fn cmd_disassemble(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
     let index = match args.get(0).map(|n| n.parse()).transpose()? {
         Some(index) => index,
         _ => dbg.get_vm()?.ip().func_index,
     };
-    let curr_instr_index = dbg.vm().and_then(|vm| {
-        if vm.ip().func_index == index {
-            Some(vm.ip().instr_index)
-        } else {
-            None
-        }
-    });
     if let Some(code) = dbg
         .get_file()?
         .module()
@@ -577,18 +572,43 @@ fn cmd_disassemble(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
         .and_then(|c| c.bodies().get(index))
         .map(|b| b.code().elements())
     {
-        let max_i_len = (code.len() - 1).to_string().len();
-        for (i, instr) in code.iter().enumerate() {
-            let prefix = match curr_instr_index {
-                Some(x) if x == i => format!("=> {}:{:>02$}", index, i, max_i_len).green().to_string(),
-                _ => format!("   {}:{:>02$}", index, i, max_i_len),
+        if args.is_empty() && code.len() > DISASSEMBLY_DEFAULT_MAX_LINES {
+            let ip = dbg.get_vm()?.ip();
+            let start = if ip.instr_index > code.len() - DISASSEMBLY_DEFAULT_MAX_LINES {
+                code.len() - DISASSEMBLY_DEFAULT_MAX_LINES
+            } else {
+                ip.instr_index.max(2) - 2
             };
-            println!("{}   {}", prefix, instr);
+            let end = start + DISASSEMBLY_DEFAULT_MAX_LINES;
+            print_disassembly(dbg, CodePosition::new(index, start), &code[start..end]);
+        }
+        else {
+            print_disassembly(dbg, CodePosition::new(index, 0), code);
         }
     } else {
         bail!("Invalid function index");
     }
     Ok(())
+}
+
+fn print_disassembly(dbg: &Debugger, start: CodePosition, instrs: &[Instruction]) {
+    let curr_instr_index = dbg.vm().and_then(|vm| {
+        if vm.ip().func_index == start.func_index {
+            Some(vm.ip().instr_index)
+        } else {
+            None
+        }
+    });
+    let CodePosition {func_index, instr_index }  = start;
+    let max_index_len = (instr_index + instrs.len() - 1).to_string().len();
+    for (i, instr) in instrs.iter().enumerate() {
+        let index = instr_index + i;
+        let prefix = match curr_instr_index {
+            Some(x) if x == index => format!("=> {}:{:>02$}", func_index, index, max_index_len).green().to_string(),
+            _ => format!("   {}:{:>02$}", func_index, index, max_index_len),
+        };
+        println!("{}   {}", prefix, instr);
+    }
 }
 
 fn print_header(text: &str) {
