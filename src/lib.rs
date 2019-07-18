@@ -239,6 +239,10 @@ impl Debugger {
         Ok(self.get_vm_mut()?.execute_step_over().err())
     }
 
+    pub fn execute_until_return(&mut self) -> DebuggerResult<Option<Trap>> {
+        Ok(self.get_vm_mut()?.execute_step_out().err())
+    }
+
     fn create_vm(&mut self) -> DebuggerResult<&mut VM> {
         let file = self.file.as_ref().ok_or(DebuggerError::NoFileLoaded)?;
         let module = file.module.clone();

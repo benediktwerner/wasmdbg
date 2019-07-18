@@ -543,6 +543,16 @@ impl VM {
         }
     }
 
+    pub fn execute_step_out(&mut self) -> VMResult<()> {
+        let curr_frame_index = self.function_stack.len();
+        loop {
+            self.execute_step()?;
+            if curr_frame_index - 1 == self.function_stack.len() {
+                return Ok(());
+            }
+        }
+    }
+
     pub fn execute_step(&mut self) -> VMResult<()> {
         if let Some(trap) = &self.trap {
             return Err(trap.to_owned());

@@ -293,6 +293,11 @@ impl Commands {
                 .requires_running()
         );
         commands.push(
+            Command::new("finish", cmd_finish)
+                .description("Execute until the current function returns")
+                .requires_running(),
+        );
+        commands.push(
             Command::new("delete", cmd_delete)
                 .description("Delete a breakpoint")
                 .help("delete BREAKPOINT_INDEX\n\nDelete the breakpoint with the specified index.")
@@ -637,6 +642,14 @@ fn cmd_next(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
         }
     }
     print_context(dbg)
+}
+
+fn cmd_finish(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+    if let Some(trap) = dbg.execute_until_return()? {
+        print_run_result(trap, dbg)
+    } else {
+        print_context(dbg)
+    }
 }
 
 const DISASSEMBLY_DEFAULT_MAX_LINES: usize = 20;
