@@ -551,7 +551,9 @@ impl VM {
             Instruction::End => {
                 if self.label_stack.pop().is_none() {
                     let frame = self.function_stack.pop().unwrap();
-                    self.ip = frame.ret_addr;
+                    if !self.function_stack().is_empty() {
+                        self.ip = frame.ret_addr;
+                    }
                 }
             }
             Instruction::Br(index) => self.branch(index),
