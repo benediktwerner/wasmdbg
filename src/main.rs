@@ -15,6 +15,7 @@ use wasmdbg::Debugger;
 
 mod cmds;
 mod readline;
+mod utils;
 
 use cmds::{load_file, CommandHandler, Commands};
 use readline::Readline;

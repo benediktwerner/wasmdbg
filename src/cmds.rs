@@ -9,11 +9,12 @@ use std::sync::Arc;
 use colored::*;
 use failure::Error;
 use parity_wasm::elements::{Instruction, Type::Function};
-use terminal_size::{terminal_size, Width};
 
 use wasmdbg::value::Value;
 use wasmdbg::vm::{CodePosition, Trap};
 use wasmdbg::{Debugger, LoadError};
+
+use crate::utils::{print_header, print_line};
 
 type CmdResult = Result<(), Error>;
 
@@ -242,6 +243,18 @@ impl Commands {
             Command::new("continue", cmd_continue)
                 .alias("c")
                 .description("Continue execution after a breakpoint")
+                .requires_running(),
+        );
+        commands.push(
+            Command::new("backtrace", cmd_backtrace)
+                .description("Print a function backtrace")
+                .requires_running(),
+        );
+        commands.push(
+            Command::new("locals", cmd_locals)
+                .takes_args_range(0..=1)
+                .description("Print locals")
+                .help("locals [COUNT]\n\nPrint the value of the locals of the current function")
                 .requires_running(),
         );
         commands.push(
@@ -559,6 +572,19 @@ fn cmd_continue(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
     print_run_result(dbg.continue_execution()?, dbg)
 }
 
+fn cmd_backtrace(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+    let backtrace = dbg.backtrace()?;
+    if let Some(curr_func) = backtrace.first() {
+        println!("=> f {:<10}{}", curr_func.func_index, curr_func.instr_index);
+        for func in &backtrace[1..] {
+            println!("   f {:<10}{}", func.func_index, func.instr_index);
+        }
+    } else {
+        println!("WTF? No function backtrace...");
+    }
+    Ok(())
+}
+
 fn cmd_step(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
     let steps: u32 = args.get(0).map(|n| n.parse()).transpose()?.unwrap_or(1);
     for _ in 0..steps {
@@ -642,23 +668,43 @@ fn print_disassembly(dbg: &Debugger, start: CodePosition, instrs: &[Instruction]
     }
 }
 
-fn print_header(text: &str) {
-    let terminal_width = match terminal_size() {
-        Some((Width(w), _)) => w as usize,
-        None => 80,
+fn cmd_locals(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
+    let max_count = if let Some(count) = args.get(0) {
+        if count == &"all" {
+            usize::max_value()
+        } else {
+            count.parse()?
+        }
+    } else {
+        17
     };
-    let line_length = terminal_width - text.len() - 8;
-    println!(
-        "{}",
-        format!("──[ {} ]──{:─<2$}", text, "", line_length).blue()
-    )
+    let locals = dbg.locals()?;
+    if locals.len() > max_count {
+        for (i, local) in locals[..max_count].iter().enumerate() {
+            println!("Local {:>3}: {:?}", i, local);
+        }
+        println!("...");
+    } else if locals.is_empty() {
+        println!("<no locals>");
+    } else {
+        for (i, local) in locals.iter().enumerate() {
+            println!("Local {:>3}: {:?}", i, local);
+        }
+    }
+    Ok(())
 }
 
 fn print_context(dbg: &mut Debugger) -> CmdResult {
+    print_header("LOCALS");
+    cmd_locals(dbg, &[])?;
     print_header("DISASM");
     cmd_disassemble(dbg, &[])?;
     print_header("STACK");
-    cmd_stack(dbg, &[])
+    cmd_stack(dbg, &[])?;
+    print_header("BACKTRACE");
+    cmd_backtrace(dbg, &[])?;
+    print_line();
+    Ok(())
 }
 
 fn cmd_context(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {

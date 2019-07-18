@@ -168,6 +168,23 @@ impl Debugger {
         Ok(())
     }
 
+    pub fn backtrace(&self) -> DebuggerResult<Vec<CodePosition>> {
+        let vm = self.get_vm()?;
+        let mut backtrace = vec![vm.ip()];
+        for frame in vm.function_stack().iter().skip(1).rev() {
+            backtrace.push(frame.ret_addr);
+        }
+        Ok(backtrace)
+    }
+
+    pub fn locals(&self) -> DebuggerResult<&[Value]> {
+        if let Some(frame) = self.get_vm()?.function_stack().last() {
+            Ok(&frame.locals)
+        } else {
+            Ok(&[])
+        }
+    }
+
     pub fn breakpoints(&self) -> DebuggerResult<Ref<'_, Breakpoints>> {
         Ok(self.get_file()?.breakpoints())
     }

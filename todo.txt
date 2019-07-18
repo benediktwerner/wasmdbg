@@ -1,5 +1,3 @@
-function backtrace (show function stack)
-show locals
 show globals
 show memory
 show all sections (types, inits, etc.)

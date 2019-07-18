@@ -84,9 +84,9 @@ enum Label {
     Unbound,
 }
 
-struct FunctionFrame {
-    ret_addr: CodePosition,
-    locals: Vec<Value>,
+pub struct FunctionFrame {
+    pub ret_addr: CodePosition,
+    pub locals: Vec<Value>,
 }
 
 const PAGE_SIZE: usize = 64 * 1024; // 64 KiB
@@ -268,6 +268,10 @@ impl VM {
 
     pub fn value_stack(&self) -> &Vec<Value> {
         &self.value_stack
+    }
+
+    pub fn function_stack(&self) -> &Vec<FunctionFrame> {
+        &self.function_stack
     }
 
     pub fn trap(&self) -> Option<&Trap> {
