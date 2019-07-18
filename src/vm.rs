@@ -579,8 +579,10 @@ impl VM {
             Instruction::Else => self.branch(0)?,
             Instruction::End => {
                 if let Some(Label::Return) = self.label_stack.pop() {
-                    let frame = self.function_stack.pop().unwrap();
-                    self.ip = frame.ret_addr;
+                    if !self.label_stack().is_empty() {
+                        let frame = self.function_stack.pop().unwrap();
+                        self.ip = frame.ret_addr;
+                    }
                 }
             }
             Instruction::Br(index) => self.branch(index)?,
@@ -863,7 +865,7 @@ impl VM {
             _ => return Err(Trap::UnknownInstruction(instr)),
         }
 
-        if self.function_stack.is_empty() {
+        if self.label_stack.is_empty() {
             return Err(Trap::ExecutionFinished);
         }
 
