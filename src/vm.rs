@@ -547,7 +547,7 @@ impl VM {
         let curr_frame_index = self.function_stack.len();
         loop {
             self.execute_step()?;
-            if curr_frame_index == self.function_stack.len() {
+            if curr_frame_index >= self.function_stack.len() {
                 return Ok(());
             }
         }
