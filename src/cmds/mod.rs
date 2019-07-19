@@ -482,7 +482,7 @@ impl CommandHandler {
             match self.commands.find_by_name(cmd_name) {
                 Some(cmd) => {
                     println!(
-                        "{} {}\n",
+                        "Usage: {} {}\n",
                         cmd.name,
                         cmd.args
                             .iter()

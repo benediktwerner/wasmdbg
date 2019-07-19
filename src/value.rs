@@ -1,9 +1,11 @@
 use std::any::Any;
+use std::fmt;
+use std::str::FromStr;
+
+use parity_wasm::elements::ValueType;
 
 use crate::nan_preserving_float::{F32, F64};
 use crate::vm::{Trap, VMResult};
-use parity_wasm::elements::ValueType;
-use std::str::FromStr;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Value {
@@ -64,6 +66,30 @@ impl Value {
     }
 }
 
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Value::I32(val) => {
+                if (val as i32) < 0 {
+                    write!(f, " i32 : {0:#08x} = {0} = {1}", val, val as i32)
+                } else {
+                    write!(f, " i32 : {0:#08x} = {0}", val)
+                }
+            }
+            Value::I64(val) => {
+                if (val as i64) < 0 {
+                    write!(f, " i64 : {0:#016x} = {0} = {1}", val, val as i64)
+                } else {
+                    write!(f, " i64 : {0:#016x} = {0}", val)
+                }
+            }
+            Value::F32(val) => write!(f, " f32 : {:#08x} ~ {:.8}", val.to_bits(), val.to_float()),
+            Value::F64(val) => write!(f, " f64 : {:#016x} ~ {:.16}", val.to_bits(), val.to_float()),
+            Value::V128(val) => write!(f, "v128 : {:#032x}", val),
+        }
+    }
+}
+
 impl From<i32> for Value {
     fn from(val: i32) -> Self {
         Value::from(val as u32)
@@ -110,7 +136,7 @@ impl From<u128> for Value {
     }
 }
 
-pub trait Number: Into<Value> + Copy + Any + std::fmt::Display {
+pub trait Number: Into<Value> + Copy + Any + fmt::Display {
     fn value_type() -> ValueType;
 }
 

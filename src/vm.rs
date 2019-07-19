@@ -299,6 +299,10 @@ impl VM {
         self.ip
     }
 
+    pub fn globals(&self) -> &Vec<Value> {
+        &self.globals
+    }
+
     fn push(&mut self, val: Value) {
         self.value_stack.push(val);
     }

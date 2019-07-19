@@ -185,6 +185,10 @@ impl Debugger {
         }
     }
 
+    pub fn globals(&self) -> DebuggerResult<&[Value]> {
+        Ok(self.get_vm()?.globals())
+    }
+
     pub fn breakpoints(&self) -> DebuggerResult<Ref<'_, Breakpoints>> {
         Ok(self.get_file()?.breakpoints())
     }

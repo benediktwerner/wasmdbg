@@ -1,7 +1,6 @@
 use colored::*;
 use parity_wasm::elements::Instruction;
 
-use wasmdbg::value::Value;
 use wasmdbg::vm::{CodePosition, ModuleHelper};
 use wasmdbg::Debugger;
 
@@ -15,7 +14,7 @@ pub fn add_cmds(commands: &mut Commands) {
         Command::new("locals", cmd_locals)
             .takes_args("[all|COUNT:usize]")
             .description("Print locals")
-            .help("Print the value of the locals of the current function")
+            .help("Print the values of the locals of the current function")
             .requires_running(),
     );
     commands.add(
@@ -49,6 +48,13 @@ pub fn add_cmds(commands: &mut Commands) {
             .description("Show current execution context")
             .requires_running(),
     );
+
+    commands.add(
+        Command::new("globals", cmd_globals)
+            .description("Print globals")
+            .description("Print the values of the globals")
+            .requires_running(),
+    );
 }
 
 fn cmd_locals(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
@@ -59,16 +65,20 @@ fn cmd_locals(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
         _ => unreachable!(),
     };
     let locals = dbg.locals()?;
-    if locals.len() > max_count {
-        for (i, local) in locals[..max_count].iter().enumerate() {
-            println!("Local {:>3}: {:?}", i, local);
-        }
-        println!("...");
-    } else if locals.is_empty() {
+    if locals.is_empty() {
         println!("<no locals>");
     } else {
-        for (i, local) in locals.iter().enumerate() {
-            println!("Local {:>3}: {:?}", i, local);
+        let locals_trimmed = if locals.len() > max_count {
+            &locals[..max_count]
+        } else {
+            locals
+        };
+        let max_index_len = locals_trimmed.len().to_string().len();
+        for (i, local) in locals_trimmed.iter().enumerate() {
+            println!("Local {:>2$}: {}", i, local, max_index_len);
+        }
+        if locals.len() > max_count {
+            println!("...");
         }
     }
     Ok(())
@@ -114,14 +124,9 @@ fn cmd_stack(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
         println!("<empty>");
         return Ok(());
     }
-    for value in value_stack.iter().rev() {
-        match value {
-            Value::I32(val) => println!("int32   : {}", val),
-            Value::I64(val) => println!("int64   : {}", val),
-            Value::F32(val) => println!("float32 : {}", val),
-            Value::F64(val) => println!("float64 : {}", val),
-            Value::V128(val) => println!("v128    : {}", val),
-        }
+    let max_index_len = value_stack.len().to_string().len();
+    for (i, value) in value_stack.iter().enumerate().rev() {
+        println!(" {:>2$}: {}", i, value, max_index_len);
     }
     Ok(())
 }
@@ -215,5 +220,18 @@ pub fn print_context(dbg: &mut Debugger) -> CmdResult {
     print_header("BACKTRACE");
     cmd_backtrace(dbg, &[])?;
     print_line();
+    Ok(())
+}
+
+fn cmd_globals(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    let globals = dbg.globals()?;
+    if globals.is_empty() {
+        println!("<no locals>");
+    } else {
+        let max_index_len = globals.len().to_string().len();
+        for (i, global) in globals.iter().enumerate() {
+            println!("Global {:>2$}: {}", i, global, max_index_len);
+        }
+    }
     Ok(())
 }

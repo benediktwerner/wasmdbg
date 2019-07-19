@@ -112,7 +112,7 @@ fn cmd_break(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
         instr_index,
     };
     let index = dbg.add_breakpoint(breakpoint)?;
-    println!("Set breakpoint {} at {}:{}", index, func_index, instr_index);
+    println!("Set breakpoint {} at {}", index, breakpoint);
     Ok(())
 }
 
@@ -162,7 +162,7 @@ fn print_run_result(trap: Trap, dbg: &mut Debugger) -> CmdResult {
     match trap {
         Trap::ExecutionFinished => {
             if let Some(result) = dbg.get_vm()?.value_stack().first() {
-                println!("Finished execution => {:?}", result);
+                println!("Finished execution => {}", result);
             } else {
                 println!("Finished execution")
             }
