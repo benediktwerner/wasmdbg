@@ -65,6 +65,8 @@ pub enum Trap {
     BreakpointReached(u32),
     #[fail(display = "Invalid branch index")]
     InvalidBranchIndex,
+    #[fail(display = "Out of range memory access at address {:#08x}", _0)]
+    MemoryAccessOutOfRange(u32),
 }
 
 pub type VMResult<T> = Result<T, Trap>;
@@ -104,7 +106,7 @@ pub struct FunctionFrame {
 
 const PAGE_SIZE: usize = 64 * 1024; // 64 KiB
 
-struct Memory {
+pub struct Memory {
     data: Vec<u8>,
     limits: ResizableLimits,
 }
@@ -161,18 +163,30 @@ impl Memory {
         page_count
     }
 
-    fn load<T: LittleEndianConvert>(&self, address: u32) -> VMResult<T> {
+    pub fn data(&self) -> &Vec<u8> {
+        &self.data
+    }
+
+    pub fn load<T: LittleEndianConvert>(&self, address: u32) -> VMResult<T> {
         // TODO: check memory access
         let size = core::mem::size_of::<T>();
         let address = address as usize;
-        Ok(T::from_little_endian(&self.data[address..address + size]))
+        let bytes = self
+            .data
+            .get(address..address + size)
+            .ok_or_else(|| Trap::MemoryAccessOutOfRange((address + size) as u32))?;
+        Ok(T::from_little_endian(bytes))
     }
 
     fn store<T: LittleEndianConvert>(&mut self, address: u32, value: T) -> VMResult<()> {
         // TODO: check memory access
         let size = core::mem::size_of::<T>();
         let address = address as usize;
-        value.to_little_endian(&mut self.data[address..address + size]);
+        let bytes = self
+            .data
+            .get_mut(address..address + size)
+            .ok_or_else(|| Trap::MemoryAccessOutOfRange((address + size) as u32))?;
+        value.to_little_endian(bytes);
         Ok(())
     }
 }
@@ -301,6 +315,10 @@ impl VM {
 
     pub fn globals(&self) -> &Vec<Value> {
         &self.globals
+    }
+
+    pub fn memory(&self) -> &Memory {
+        &self.memory
     }
 
     fn push(&mut self, val: Value) {

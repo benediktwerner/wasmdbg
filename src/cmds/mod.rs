@@ -13,6 +13,7 @@ use wasmdbg::{Debugger, LoadError};
 mod context;
 mod execution;
 mod info;
+mod printing;
 
 type CmdResult = Result<(), Error>;
 
@@ -27,6 +28,7 @@ impl CmdArg {
     fn parse(s: &str, arg_type: &CmdArgType) -> Result<Self, Error> {
         match arg_type {
             CmdArgType::Str(_) => Ok(CmdArg::Str(s.to_string())),
+            CmdArgType::Fmt(_) => panic!("Tried to parse fmt arg with CmdArg::parse()"),
             CmdArgType::Path(_) => Ok(CmdArg::Str(s.to_string())),
             CmdArgType::Usize(_) => Ok(CmdArg::Usize(s.parse()?)),
             CmdArgType::U32(_) => Ok(CmdArg::U32(s.parse()?)),
@@ -45,16 +47,35 @@ impl CmdArg {
                 }
                 Err(format_err!("Expected {}", arg_type))
             }
-            CmdArgType::List(_) => unreachable!(), // Parsing list args is special and happens elsewhere
+            CmdArgType::List(_) => panic!("Tried to parse list arg with CmdArg::parse()"),
             CmdArgType::Opt(arg_type) => CmdArg::parse(s, arg_type),
         }
     }
 
-    fn parse_all(args: &[&str], arg_types: &[CmdArgType]) -> Result<Vec<CmdArg>, String> {
+    fn parse_all(
+        fmt_arg: Option<&str>,
+        args: &[&str],
+        arg_types: &[CmdArgType],
+    ) -> Result<Vec<CmdArg>, String> {
         let mut args_parsed = Vec::new();
         let mut args_iter = args.iter();
+        let mut arg_types_iter = arg_types.iter();
 
-        for (i, arg_type) in arg_types.iter().enumerate() {
+        if let Some(CmdArgType::Fmt(_)) = arg_types.get(0) {
+            arg_types_iter.next();
+            if let Some(fmt_arg) = fmt_arg {
+                args_parsed.push(CmdArg::Str(fmt_arg.to_string()));
+            } else if let Some(arg) = args.get(0) {
+                if arg.starts_with('/') {
+                    args_parsed.push(CmdArg::Str(arg[1..].to_string()));
+                    args_iter.next();
+                }
+            }
+        } else if let Some(fmt_arg) = fmt_arg {
+            return Err(format!("Unexpected format argument: \"{}\"", fmt_arg));
+        }
+
+        for (i, arg_type) in arg_types_iter.enumerate() {
             if let Some(arg) = args_iter.next() {
                 if let CmdArgType::List(arg_type) = arg_type {
                     for arg in args_iter {
@@ -76,7 +97,7 @@ impl CmdArg {
                 }
             } else if let CmdArgType::Opt(_) = arg_type {
             } else {
-                return Err(format!("Missing {}. argument", i));
+                return Err(format!("Missing {}. argument", i + 1));
             }
         }
 
@@ -149,6 +170,7 @@ impl<'a> CmdArgOption for Option<&'a CmdArg> {
 
 pub enum CmdArgType {
     Str(&'static str),
+    Fmt(&'static str),
     Path(&'static str),
     Usize(&'static str),
     U32(&'static str),
@@ -162,6 +184,7 @@ impl fmt::Display for CmdArgType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             CmdArgType::Str(name) => write!(f, "{}", name),
+            CmdArgType::Fmt(name) => write!(f, "/{}", name),
             CmdArgType::Path(name) => write!(f, "{}", name),
             CmdArgType::Usize(name) => write!(f, "{}", name),
             CmdArgType::U32(name) => write!(f, "{}", name),
@@ -200,6 +223,8 @@ impl From<&'static str> for CmdArgType {
                 "u32" => CmdArgType::U32(name),
                 other => panic!("Invalid type in cmd arguments: {}", other),
             }
+        } else if s.starts_with('/') {
+            CmdArgType::Fmt(&s[1..])
         } else {
             CmdArgType::Const(s)
         }
@@ -262,7 +287,7 @@ impl Command {
         self
     }
 
-    pub fn handle(&self, dbg: &mut Debugger, args: &[&str]) {
+    pub fn handle(&self, dbg: &mut Debugger, fmt_arg: Option<&str>, args: &[&str]) {
         if self.requires_file && dbg.file().is_none() {
             println!("No wasm binary loaded.\nUse the \"load\" command to load one.");
             return;
@@ -285,7 +310,7 @@ impl Command {
                 }
                 return;
             }
-            match CmdArg::parse_all(args, &self.args) {
+            match CmdArg::parse_all(fmt_arg, args, &self.args) {
                 Ok(args) => {
                     if let Err(error) = handler(dbg, &args) {
                         println!("Error: {}", error);
@@ -297,7 +322,7 @@ impl Command {
             let cmds: &[Command] = &self.subcommands;
             for cmd in cmds {
                 if cmd.has_name(name) {
-                    cmd.handle(dbg, &args[1..]);
+                    cmd.handle(dbg, None, &args[1..]);
                     return;
                 }
             }
@@ -390,6 +415,7 @@ impl Commands {
 
         info::add_cmds(&mut cmds);
         context::add_cmds(&mut cmds);
+        printing::add_cmds(&mut cmds);
         execution::add_cmds(&mut cmds);
 
         cmds
@@ -433,14 +459,21 @@ impl CommandHandler {
     pub fn handle_line(&mut self, dbg: &mut Debugger, line: &str) -> bool {
         let mut args_iter = line.split_whitespace();
 
-        if let Some(cmd_name) = args_iter.next() {
+        if let Some(mut cmd_name) = args_iter.next() {
+            let fmt = if cmd_name.contains('/') {
+                let mut split = cmd_name.split('/');
+                cmd_name = split.next().unwrap();
+                split.next()
+            } else {
+                None
+            };
             match cmd_name {
                 "help" => self.print_help(args_iter.next()),
                 "quit" | "exit" => {
                     return true;
                 }
                 _ => match self.commands.find_by_name(cmd_name) {
-                    Some(cmd) => cmd.handle(dbg, &args_iter.collect::<Vec<&str>>()),
+                    Some(cmd) => cmd.handle(dbg, fmt, &args_iter.collect::<Vec<&str>>()),
                     None => println!("Unknown command: \"{}\". Try \"help\".", cmd_name),
                 },
             }

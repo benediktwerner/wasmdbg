@@ -13,7 +13,7 @@ pub mod nan_preserving_float;
 pub mod value;
 pub mod vm;
 use value::Value;
-use vm::{CodePosition, InitError, ModuleHelper, Trap, VM};
+use vm::{CodePosition, InitError, Memory, ModuleHelper, Trap, VM};
 
 #[derive(Debug, Fail)]
 pub enum LoadError {
@@ -187,6 +187,10 @@ impl Debugger {
 
     pub fn globals(&self) -> DebuggerResult<&[Value]> {
         Ok(self.get_vm()?.globals())
+    }
+
+    pub fn memory(&self) -> DebuggerResult<&Memory> {
+        Ok(self.get_vm()?.memory())
     }
 
     pub fn breakpoints(&self) -> DebuggerResult<Ref<'_, Breakpoints>> {

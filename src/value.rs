@@ -71,21 +71,26 @@ impl fmt::Display for Value {
         match *self {
             Value::I32(val) => {
                 if (val as i32) < 0 {
-                    write!(f, " i32 : {0:#08x} = {0} = {1}", val, val as i32)
+                    write!(f, " i32 : 0x{0:08x} = {0} = {1}", val, val as i32)
                 } else {
-                    write!(f, " i32 : {0:#08x} = {0}", val)
+                    write!(f, " i32 : 0x{0:08x} = {0}", val)
                 }
             }
             Value::I64(val) => {
                 if (val as i64) < 0 {
-                    write!(f, " i64 : {0:#016x} = {0} = {1}", val, val as i64)
+                    write!(f, " i64 : 0x{0:016x} = {0} = {1}", val, val as i64)
                 } else {
-                    write!(f, " i64 : {0:#016x} = {0}", val)
+                    write!(f, " i64 : 0x{0:016x} = {0}", val)
                 }
             }
-            Value::F32(val) => write!(f, " f32 : {:#08x} ~ {:.8}", val.to_bits(), val.to_float()),
-            Value::F64(val) => write!(f, " f64 : {:#016x} ~ {:.16}", val.to_bits(), val.to_float()),
-            Value::V128(val) => write!(f, "v128 : {:#032x}", val),
+            Value::F32(val) => write!(f, " f32 : 0x{:08x} ~ {:.8}", val.to_bits(), val.to_float()),
+            Value::F64(val) => write!(
+                f,
+                " f64 : 0x{:016x} ~ {:.16}",
+                val.to_bits(),
+                val.to_float()
+            ),
+            Value::V128(val) => write!(f, "v128 : 0x{:032x}", val),
         }
     }
 }
@@ -321,6 +326,8 @@ macro_rules! impl_wrap_to {
     };
 }
 
+impl_wrap_to!(u8, u8);
+impl_wrap_to!(u16, u8);
 impl_wrap_to!(u32, u8);
 impl_wrap_to!(u32, u16);
 impl_wrap_to!(u64, u8);

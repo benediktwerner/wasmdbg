@@ -78,6 +78,7 @@ fn complete(
 fn match_cmd_arg(arg_type: &CmdArgType, word: &str) -> bool {
     match arg_type {
         CmdArgType::Str(_) => true,
+        CmdArgType::Fmt(_) => true,
         CmdArgType::Path(_) => true,
         CmdArgType::Usize(_) => true,
         CmdArgType::U32(_) => true,
@@ -91,6 +92,7 @@ fn match_cmd_arg(arg_type: &CmdArgType, word: &str) -> bool {
 fn complete_cmd_arg(arg_type: &CmdArgType, word: &str) -> Option<Vec<Completion>> {
     match arg_type {
         CmdArgType::Str(_) => None,
+        CmdArgType::Fmt(_) => None,
         CmdArgType::Path(_) => Some(complete_path(word)),
         CmdArgType::Usize(_) => None,
         CmdArgType::U32(_) => None,
