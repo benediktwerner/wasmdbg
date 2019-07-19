@@ -1,7 +1,7 @@
 use wasmdbg::vm::{CodePosition, Trap};
 use wasmdbg::Debugger;
 
-use super::{CmdResult, Command, Commands};
+use super::{CmdArg, CmdResult, Command, Commands};
 
 pub fn add_cmds(commands: &mut Commands) {
     commands.add(
@@ -31,7 +31,7 @@ pub fn add_cmds(commands: &mut Commands) {
     );
 }
 
-fn cmd_info_file(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     let file = dbg.file().unwrap();
     let module = file.module();
 
@@ -45,7 +45,7 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_info_break(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+fn cmd_info_break(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     let breakpoints = dbg.breakpoints()?;
     ensure!(breakpoints.len() > 0, "No breakpoints");
 
@@ -63,14 +63,14 @@ fn cmd_info_break(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_info_ip(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+fn cmd_info_ip(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     let ip = dbg.vm().unwrap().ip();
     println!("Function: {}", ip.func_index);
     println!("Instruction: {}", ip.instr_index);
     Ok(())
 }
 
-fn cmd_status(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+fn cmd_status(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     if let Some(trap) = dbg.vm().unwrap().trap() {
         if let Trap::ExecutionFinished = trap {
             println!("Finished execution");

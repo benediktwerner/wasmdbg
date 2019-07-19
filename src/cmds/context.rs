@@ -5,7 +5,7 @@ use wasmdbg::value::Value;
 use wasmdbg::vm::{CodePosition, ModuleHelper};
 use wasmdbg::Debugger;
 
-use super::{CmdResult, Command, Commands};
+use super::{CmdArg, CmdResult, Command, Commands};
 use crate::utils::{print_header, print_line};
 
 const DISASSEMBLY_DEFAULT_MAX_LINES: usize = 20;
@@ -13,18 +13,18 @@ const DISASSEMBLY_DEFAULT_MAX_LINES: usize = 20;
 pub fn add_cmds(commands: &mut Commands) {
     commands.add(
         Command::new("locals", cmd_locals)
-            .takes_args_range(0..=1)
+            .takes_args("[all|COUNT:usize]")
             .description("Print locals")
-            .help("locals [COUNT]\n\nPrint the value of the locals of the current function")
+            .help("Print the value of the locals of the current function")
             .requires_running(),
     );
     commands.add(
         Command::new("disassemble", cmd_disassemble)
             .alias("disas")
             .alias("disass")
-            .takes_args_range(0..=1)
+            .takes_args("[FUNC_INDEX:u32]")
             .description("Disassemble code")
-            .help("disassemble [FUNC_INDEX]\n\nDisassemble the current function or the one with the specified index.")
+            .help("Disassemble the current function or the one with the specified index.")
             .requires_file(),
     );
     commands.add(
@@ -34,13 +34,13 @@ pub fn add_cmds(commands: &mut Commands) {
     );
     commands.add(
         Command::new("labels", cmd_labels)
-            .takes_args_range(0..=1)
+            .takes_args("[all|COUNT:usize]")
             .description("Print the current label stack")
             .requires_running(),
     );
     commands.add(
         Command::new("backtrace", cmd_backtrace)
-            .takes_args_range(0..=1)
+            .takes_args("[all|COUNT:usize]")
             .description("Print a function backtrace")
             .requires_running(),
     );
@@ -51,15 +51,12 @@ pub fn add_cmds(commands: &mut Commands) {
     );
 }
 
-fn cmd_locals(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
-    let max_count = if let Some(count) = args.get(0) {
-        if count == &"all" {
-            usize::max_value()
-        } else {
-            count.parse()?
-        }
-    } else {
-        17
+fn cmd_locals(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
+    let max_count = match args.get(0) {
+        Some(CmdArg::Const("all")) => usize::max_value(),
+        Some(CmdArg::Usize(count)) => *count,
+        None => 17,
+        _ => unreachable!(),
     };
     let locals = dbg.locals()?;
     if locals.len() > max_count {
@@ -77,10 +74,11 @@ fn cmd_locals(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_disassemble(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
-    let index = match args.get(0).map(|n| n.parse()).transpose()? {
-        Some(index) => index,
-        _ => dbg.get_vm()?.ip().func_index,
+fn cmd_disassemble(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
+    let index = match args.get(0) {
+        Some(CmdArg::U32(func_index)) => *func_index,
+        None => dbg.get_vm()?.ip().func_index,
+        _ => unreachable!(),
     };
     if let Some(code) = dbg
         .get_file()?
@@ -110,7 +108,7 @@ fn cmd_disassemble(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_stack(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+fn cmd_stack(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     let value_stack = dbg.vm().unwrap().value_stack();
     if value_stack.is_empty() {
         println!("<empty>");
@@ -128,15 +126,12 @@ fn cmd_stack(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_labels(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
-    let mut max_count = if let Some(count) = args.get(0) {
-        if count == &"all" {
-            usize::max_value()
-        } else {
-            count.parse()?
-        }
-    } else {
-        5
+fn cmd_labels(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
+    let mut max_count = match args.get(0) {
+        Some(CmdArg::Const("all")) => usize::max_value(),
+        Some(CmdArg::Usize(count)) => *count,
+        None => 5,
+        _ => unreachable!(),
     };
     let labels = dbg.get_vm()?.label_stack();
     if labels.len() < max_count {
@@ -149,15 +144,12 @@ fn cmd_labels(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_backtrace(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
-    let mut max_count = if let Some(count) = args.get(0) {
-        if count == &"all" {
-            usize::max_value()
-        } else {
-            count.parse()?
-        }
-    } else {
-        5
+fn cmd_backtrace(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
+    let mut max_count = match args.get(0) {
+        Some(CmdArg::Const("all")) => usize::max_value(),
+        Some(CmdArg::Usize(count)) => *count,
+        None => 5,
+        _ => unreachable!(),
     };
     let backtrace = dbg.backtrace()?;
     if backtrace.len() < max_count {
@@ -174,7 +166,7 @@ fn cmd_backtrace(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_context(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+fn cmd_context(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     print_context(dbg)
 }
 
