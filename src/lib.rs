@@ -157,6 +157,10 @@ impl Debugger {
 
         let module =
             parity_wasm::deserialize_file(file_path).map_err(LoadError::SerializationError)?;
+        let module = match module.parse_names() {
+            Ok(module) => module,
+            Err((_, module)) => module,
+        };
 
         self.file = Some(File {
             file_path: file_path.to_owned(),
