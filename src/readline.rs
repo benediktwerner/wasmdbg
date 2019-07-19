@@ -17,8 +17,7 @@ lazy_static! {
 }
 
 fn find_cmds<'a>(cmds: &'a Commands, prefix: &str) -> Vec<&'a Command> {
-    cmds.commands
-        .iter()
+    cmds.iter()
         .filter(|cmd| {
             cmd.name.starts_with(prefix)
                 || cmd.aliases.iter().any(|&alias| alias.starts_with(prefix))

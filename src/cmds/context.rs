@@ -1,0 +1,227 @@
+use colored::*;
+use parity_wasm::elements::Instruction;
+
+use wasmdbg::value::Value;
+use wasmdbg::vm::{CodePosition, ModuleHelper};
+use wasmdbg::Debugger;
+
+use super::{CmdResult, Command, Commands};
+use crate::utils::{print_header, print_line};
+
+const DISASSEMBLY_DEFAULT_MAX_LINES: usize = 20;
+
+pub fn add_cmds(commands: &mut Commands) {
+    commands.add(
+        Command::new("locals", cmd_locals)
+            .takes_args_range(0..=1)
+            .description("Print locals")
+            .help("locals [COUNT]\n\nPrint the value of the locals of the current function")
+            .requires_running(),
+    );
+    commands.add(
+        Command::new("disassemble", cmd_disassemble)
+            .alias("disas")
+            .alias("disass")
+            .takes_args_range(0..=1)
+            .description("Disassemble code")
+            .help("disassemble [FUNC_INDEX]\n\nDisassemble the current function or the one with the specified index.")
+            .requires_file(),
+    );
+    commands.add(
+        Command::new("stack", cmd_stack)
+            .description("Print the current value stack")
+            .requires_running(),
+    );
+    commands.add(
+        Command::new("labels", cmd_labels)
+            .takes_args_range(0..=1)
+            .description("Print the current label stack")
+            .requires_running(),
+    );
+    commands.add(
+        Command::new("backtrace", cmd_backtrace)
+            .takes_args_range(0..=1)
+            .description("Print a function backtrace")
+            .requires_running(),
+    );
+    commands.add(
+        Command::new("context", cmd_context)
+            .description("Show current execution context")
+            .requires_running(),
+    );
+}
+
+fn cmd_locals(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
+    let max_count = if let Some(count) = args.get(0) {
+        if count == &"all" {
+            usize::max_value()
+        } else {
+            count.parse()?
+        }
+    } else {
+        17
+    };
+    let locals = dbg.locals()?;
+    if locals.len() > max_count {
+        for (i, local) in locals[..max_count].iter().enumerate() {
+            println!("Local {:>3}: {:?}", i, local);
+        }
+        println!("...");
+    } else if locals.is_empty() {
+        println!("<no locals>");
+    } else {
+        for (i, local) in locals.iter().enumerate() {
+            println!("Local {:>3}: {:?}", i, local);
+        }
+    }
+    Ok(())
+}
+
+fn cmd_disassemble(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
+    let index = match args.get(0).map(|n| n.parse()).transpose()? {
+        Some(index) => index,
+        _ => dbg.get_vm()?.ip().func_index,
+    };
+    if let Some(code) = dbg
+        .get_file()?
+        .module()
+        .get_func(index)
+        .map(|b| b.code().elements())
+    {
+        if args.is_empty() && code.len() > DISASSEMBLY_DEFAULT_MAX_LINES {
+            let ip = dbg.get_vm()?.ip();
+            let start = if ip.instr_index as usize > code.len() - DISASSEMBLY_DEFAULT_MAX_LINES {
+                code.len() - DISASSEMBLY_DEFAULT_MAX_LINES
+            } else {
+                ip.instr_index.max(2) as usize - 2
+            };
+            let end = start + DISASSEMBLY_DEFAULT_MAX_LINES;
+            print_disassembly(
+                dbg,
+                CodePosition::new(index, start as u32),
+                &code[start..end],
+            );
+        } else {
+            print_disassembly(dbg, CodePosition::new(index, 0), code);
+        }
+    } else {
+        bail!("Invalid function index");
+    }
+    Ok(())
+}
+
+fn cmd_stack(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+    let value_stack = dbg.vm().unwrap().value_stack();
+    if value_stack.is_empty() {
+        println!("<empty>");
+        return Ok(());
+    }
+    for value in value_stack.iter().rev() {
+        match value {
+            Value::I32(val) => println!("int32   : {}", val),
+            Value::I64(val) => println!("int64   : {}", val),
+            Value::F32(val) => println!("float32 : {}", val),
+            Value::F64(val) => println!("float64 : {}", val),
+            Value::V128(val) => println!("v128    : {}", val),
+        }
+    }
+    Ok(())
+}
+
+fn cmd_labels(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
+    let mut max_count = if let Some(count) = args.get(0) {
+        if count == &"all" {
+            usize::max_value()
+        } else {
+            count.parse()?
+        }
+    } else {
+        5
+    };
+    let labels = dbg.get_vm()?.label_stack();
+    if labels.len() < max_count {
+        max_count = labels.len();
+    }
+    for (i, label) in labels[labels.len() - max_count..].iter().rev().enumerate() {
+        // TODO: Print labels properly
+        println!("{:>3}: {:?}", labels.len() - i - 1, label);
+    }
+    Ok(())
+}
+
+fn cmd_backtrace(dbg: &mut Debugger, args: &[&str]) -> CmdResult {
+    let mut max_count = if let Some(count) = args.get(0) {
+        if count == &"all" {
+            usize::max_value()
+        } else {
+            count.parse()?
+        }
+    } else {
+        5
+    };
+    let backtrace = dbg.backtrace()?;
+    if backtrace.len() < max_count {
+        max_count = backtrace.len();
+    }
+    if let Some(curr_func) = backtrace.first() {
+        println!("=> f {:<10}{}", curr_func.func_index, curr_func.instr_index);
+        for func in &backtrace[1..max_count] {
+            println!("   f {:<10}{}", func.func_index, func.instr_index);
+        }
+    } else {
+        println!("WTF? No function backtrace...");
+    }
+    Ok(())
+}
+
+fn cmd_context(dbg: &mut Debugger, _args: &[&str]) -> CmdResult {
+    print_context(dbg)
+}
+
+fn print_disassembly(dbg: &Debugger, start: CodePosition, instrs: &[Instruction]) {
+    let curr_instr_index = dbg.vm().and_then(|vm| {
+        if vm.ip().func_index == start.func_index {
+            Some(vm.ip().instr_index)
+        } else {
+            None
+        }
+    });
+    let max_index_len = (start.instr_index as usize + instrs.len() - 1)
+        .to_string()
+        .len();
+    let breakpoints = dbg.breakpoints().ok();
+    for (i, instr) in instrs.iter().enumerate() {
+        let instr_index = start.instr_index + i as u32;
+        let addr_str = format!("{}:{:>02$}", start.func_index, instr_index, max_index_len);
+        let breakpoint = match breakpoints {
+            Some(ref breakpoints) => {
+                breakpoints.find(CodePosition::new(start.func_index, instr_index))
+            }
+            None => None,
+        };
+        let breakpoint_str = match breakpoint {
+            Some(_) => "*".red().to_string(),
+            None => " ".to_string(),
+        };
+        if curr_instr_index.map_or(false, |i| i == instr_index) {
+            println!("=> {}{}   {}", breakpoint_str, addr_str.green(), instr);
+        } else {
+            println!("   {}{}   {}", breakpoint_str, addr_str, instr);
+        }
+    }
+}
+
+pub fn print_context(dbg: &mut Debugger) -> CmdResult {
+    print_header("LOCALS");
+    cmd_locals(dbg, &[])?;
+    print_header("DISASM");
+    cmd_disassemble(dbg, &[])?;
+    print_header("VALUE STACK");
+    cmd_stack(dbg, &[])?;
+    print_header("LABEL STACK");
+    cmd_labels(dbg, &[])?;
+    print_header("BACKTRACE");
+    cmd_backtrace(dbg, &[])?;
+    print_line();
+    Ok(())
+}
