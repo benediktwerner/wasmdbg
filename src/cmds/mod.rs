@@ -10,13 +10,15 @@ use failure::Error;
 
 use wasmdbg::{Debugger, LoadError};
 
-mod context;
-mod execution;
 mod info;
+mod utils;
+mod context;
 mod printing;
+mod execution;
 
 type CmdResult = Result<(), Error>;
 
+#[derive(Debug)]
 enum CmdArg {
     Str(String),
     Const(&'static str),
@@ -78,7 +80,7 @@ impl CmdArg {
         for (i, arg_type) in arg_types_iter.enumerate() {
             if let Some(arg) = args_iter.next() {
                 if let CmdArgType::List(arg_type) = arg_type {
-                    for arg in args_iter {
+                    for arg in std::iter::once(arg).chain(args_iter) {
                         match CmdArg::parse(arg, arg_type) {
                             Ok(arg) => args_parsed.push(arg),
                             Err(error) => {
@@ -99,6 +101,10 @@ impl CmdArg {
             } else {
                 return Err(format!("Missing {}. argument", i + 1));
             }
+        }
+
+        if args_iter.next().is_some() {
+            return Err(String::from("Too many arguments."));
         }
 
         Ok(args_parsed)
@@ -297,17 +303,8 @@ impl Command {
             return;
         }
         if let Some(handler) = self.handler {
-            if args.len() > self.args.len() {
-                if self.args.is_empty() {
-                    println!("\"{}\" takes no arguments", self.name);
-                } else {
-                    println!(
-                        "Too many arguments. \"{}\" takes at most {} args but got {}",
-                        self.name,
-                        self.args.len(),
-                        args.len()
-                    );
-                }
+            if self.args.is_empty() && !args.is_empty() {
+                println!("\"{}\" takes no arguments", self.name);
                 return;
             }
             match CmdArg::parse_all(fmt_arg, args, &self.args) {
@@ -414,6 +411,7 @@ impl Commands {
         );
 
         info::add_cmds(&mut cmds);
+        utils::add_cmds(&mut cmds);
         context::add_cmds(&mut cmds);
         printing::add_cmds(&mut cmds);
         execution::add_cmds(&mut cmds);
