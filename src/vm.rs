@@ -130,7 +130,7 @@ impl Memory {
                         if data_segment.index() == 0 {
                             let offset = match data_segment.offset() {
                                 Some(offset_expr) => {
-                                    eval_init_expr(offset_expr)?.expect::<u32>().unwrap_or(0)
+                                    eval_init_expr(offset_expr)?.to::<u32>().unwrap_or(0)
                                 }
                                 None => 0,
                             } as usize;
@@ -329,19 +329,14 @@ impl VM {
         self.value_stack.pop().ok_or(Trap::PopFromEmptyStack)
     }
 
-    fn pop_expect<T: Number>(&mut self) -> VMResult<T> {
-        if let Some(val) = self.value_stack.pop() {
-            if let Some(val) = val.expect::<T>() {
-                Ok(val)
-            } else {
-                Err(Trap::TypeError {
-                    expected: val.value_type(),
-                    found: T::value_type(),
-                })
+    fn pop_as<T: Number>(&mut self) -> VMResult<T> {
+        let val = self.pop()?;
+        val.to::<T>().ok_or_else(||
+            Trap::TypeError {
+                expected: val.value_type(),
+                found: T::value_type(),
             }
-        } else {
-            Err(Trap::PopFromEmptyStack)
-        }
+        )
     }
 
     fn locals(&mut self) -> VMResult<&mut [Value]> {
@@ -418,7 +413,7 @@ impl VM {
     }
 
     fn perform_load<T: Number + LittleEndianConvert>(&mut self, offset: u32) -> VMResult<()> {
-        let address = self.pop_expect::<u32>()? + offset;
+        let address = self.pop_as::<u32>()? + offset;
         self.push(self.memory.load::<T>(address)?.into());
         Ok(())
     }
@@ -430,7 +425,7 @@ impl VM {
     where
         T: ExtendTo<U>,
     {
-        let address = self.pop_expect::<u32>()? + offset;
+        let address = self.pop_as::<u32>()? + offset;
         let val: T = self.memory.load(address)?;
         let val: U = val.extend_to();
         self.push(val.into());
@@ -438,8 +433,8 @@ impl VM {
     }
 
     fn perform_store<T: Number + LittleEndianConvert>(&mut self, offset: u32) -> VMResult<()> {
-        let value = self.pop_expect::<T>()?;
-        let address = self.pop_expect::<u32>()? + offset;
+        let value = self.pop_as::<T>()?;
+        let address = self.pop_as::<u32>()? + offset;
         self.memory.store(address, value)?;
         Ok(())
     }
@@ -448,28 +443,28 @@ impl VM {
     where
         U: WrapTo<T>,
     {
-        let value: U = self.pop_expect()?;
+        let value: U = self.pop_as()?;
         let value: T = value.wrap_to();
-        let address = self.pop_expect::<u32>()? + offset;
+        let address = self.pop_as::<u32>()? + offset;
         self.memory.store(address, value)?;
         Ok(())
     }
 
     fn unop<T: Number, R: Number, F: Fn(T) -> R>(&mut self, fun: F) -> VMResult<()> {
-        let val: T = self.pop_expect()?;
+        let val: T = self.pop_as()?;
         self.push(fun(val).into());
         Ok(())
     }
 
     fn unop_try<T: Number, R: Number, F: Fn(T) -> VMResult<R>>(&mut self, fun: F) -> VMResult<()> {
-        let val: T = self.pop_expect()?;
+        let val: T = self.pop_as()?;
         self.push(fun(val)?.into());
         Ok(())
     }
 
     fn binop<T: Number, R: Number, F: Fn(T, T) -> R>(&mut self, fun: F) -> VMResult<()> {
-        let b: T = self.pop_expect()?;
-        let a: T = self.pop_expect()?;
+        let b: T = self.pop_as()?;
+        let a: T = self.pop_as()?;
         self.push(fun(a, b).into());
         Ok(())
     }
@@ -478,8 +473,8 @@ impl VM {
         &mut self,
         fun: F,
     ) -> VMResult<()> {
-        let b: T = self.pop_expect()?;
-        let a: T = self.pop_expect()?;
+        let b: T = self.pop_as()?;
+        let a: T = self.pop_as()?;
         self.push(fun(a, b)?.into());
         Ok(())
     }
@@ -611,7 +606,7 @@ impl VM {
             Instruction::Loop(_) => self.label_stack.push(Label::Bound(self.ip.instr_index)),
             Instruction::If(_) => {
                 self.label_stack.push(Label::Unbound);
-                if self.pop_expect::<u32>()? == 0 {
+                if self.pop_as::<u32>()? == 0 {
                     self.branch_else()?;
                 }
             }
@@ -626,12 +621,12 @@ impl VM {
             }
             Instruction::Br(index) => self.branch(index)?,
             Instruction::BrIf(index) => {
-                if self.pop_expect::<u32>()? != 0 {
+                if self.pop_as::<u32>()? != 0 {
                     self.branch(index)?;
                 }
             }
             Instruction::BrTable(table_data) => {
-                let index = self.pop_expect::<u32>()?;
+                let index = self.pop_as::<u32>()?;
                 let depth = table_data
                     .table
                     .get(index as usize)
@@ -651,7 +646,7 @@ impl VM {
             // Calls
             Instruction::Call(index) => self.call(index)?,
             Instruction::CallIndirect(signature, _) => {
-                let callee = self.pop_expect::<u32>()?;
+                let callee = self.pop_as::<u32>()?;
                 let func_index = match self.default_table()?.get(callee) {
                     TableElement::Func(func_index) => func_index,
                     _ => return Err(Trap::IndirectCalleeAbsent),
@@ -671,7 +666,7 @@ impl VM {
                 self.pop()?;
             }
             Instruction::Select => {
-                let cond: u32 = self.pop_expect()?;
+                let cond: u32 = self.pop_as()?;
                 let val2 = self.pop()?;
                 let val1 = self.pop()?;
                 if cond != 0 {
@@ -748,7 +743,7 @@ impl VM {
 
             Instruction::CurrentMemory(_) => self.push(Value::I32(self.memory.page_count())),
             Instruction::GrowMemory(_) => {
-                let delta = self.pop_expect::<u32>()?;
+                let delta = self.pop_as::<u32>()?;
                 let result = self.memory.grow(delta);
                 self.push(Value::I32(result));
             }

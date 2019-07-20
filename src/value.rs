@@ -37,22 +37,8 @@ impl Value {
         }
     }
 
-    pub fn value_as_any(&self) -> &Any {
-        match self {
-            Value::I32(ref val) => val,
-            Value::I64(ref val) => val,
-            Value::F32(ref val) => val,
-            Value::F64(ref val) => val,
-            Value::V128(ref val) => val,
-        }
-    }
-
-    pub fn expect<T: Number>(&self) -> Option<T> {
-        if let Some(val) = self.value_as_any().downcast_ref::<T>() {
-            Some(*val)
-        } else {
-            None
-        }
+    pub fn to<T: Number>(&self) -> Option<T> {
+        T::from_value(*self)
     }
 
     pub fn from_str(s: &str, value_type: ValueType) -> Option<Self> {
@@ -143,6 +129,7 @@ impl From<u128> for Value {
 
 pub trait Number: Into<Value> + Copy + Any + fmt::Display {
     fn value_type() -> ValueType;
+    fn from_value(val: Value) -> Option<Self>;
 }
 
 macro_rules! impl_number {
@@ -150,6 +137,13 @@ macro_rules! impl_number {
         impl Number for $num_t {
             fn value_type() -> ValueType {
                 ValueType::$value_t
+            }
+
+            fn from_value(val: Value) -> Option<Self> {
+                if let Value::$value_t(val) = val {
+                    return Some(val.into());
+                }
+                None
             }
         }
     };
