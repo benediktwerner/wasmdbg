@@ -331,12 +331,10 @@ impl VM {
 
     fn pop_as<T: Number>(&mut self) -> VMResult<T> {
         let val = self.pop()?;
-        val.to::<T>().ok_or_else(||
-            Trap::TypeError {
-                expected: val.value_type(),
-                found: T::value_type(),
-            }
-        )
+        val.to::<T>().ok_or_else(|| Trap::TypeError {
+            expected: val.value_type(),
+            found: T::value_type(),
+        })
     }
 
     fn locals(&mut self) -> VMResult<&mut [Value]> {

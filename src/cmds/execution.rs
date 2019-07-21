@@ -3,20 +3,18 @@ use wasmdbg::vm::{CodePosition, ModuleHelper, Trap};
 use wasmdbg::Debugger;
 
 use super::context;
-use super::{CmdArg, CmdArgOption, CmdResult, Command, Commands};
+use super::{CmdArg, CmdArgOptionExt, CmdResult, Command, Commands};
 
 pub fn add_cmds(commands: &mut Commands) {
     commands.add(
         Command::new("run", cmd_run)
             .alias("r")
-            .description("Run the currently loaded binary")
-            .requires_file(),
+            .description("Run the currently loaded binary"),
     );
     commands.add(
         Command::new("call", cmd_call)
-            .takes_args("FUNC_INDEX:u32 [ARGS...]")
-            .description("Call a specific function in the current runtime context")
-            .requires_file(),
+            .takes_args("FUNC_INDEX:u32 [ARGS:str...]")
+            .description("Call a specific function in the current runtime context"),
     );
     commands.add(
             Command::new("break", cmd_break)
@@ -24,45 +22,39 @@ pub fn add_cmds(commands: &mut Commands) {
                 .takes_args("FUNC_INDEX:u32 [INSTRUCTION_INDEX:u32]")
                 .description("Set a breakpoint")
                 .help("Set a breakpoint at the specified function and instruction. If no instruction is specified the breakpoint is set to the function start. When execution reaches a breakpoint it will pause")
-                .requires_file(),
         );
     commands.add(
         Command::new("delete", cmd_delete)
             .description("Delete a breakpoint")
             .takes_args("BREAKPOINT_INDEX:u32")
-            .help("Delete the breakpoint with the specified index.")
-            .requires_file(),
+            .help("Delete the breakpoint with the specified index."),
     );
     commands.add(
         Command::new("continue", cmd_continue)
             .alias("c")
-            .description("Continue execution after a breakpoint")
-            .requires_running(),
+            .description("Continue execution after a breakpoint"),
     );
     commands.add(
         Command::new("step", cmd_step)
             .alias("stepi")
             .alias("s")
             .alias("si")
-            .takes_args("[N]")
+            .takes_args("[N:u32]")
             .description("Step one instruction")
             .help("Step exactly one or if an argument is given exactly N instructions.\nUnlike \"next\" this will enter subroutine calls.")
-            .requires_running()
     );
     commands.add(
         Command::new("next", cmd_next)
             .alias("nexti")
             .alias("n")
             .alias("ni")
-            .takes_args("[N]")
+            .takes_args("[N:u32]")
             .description("Step one instruction, but skip over subroutine calls")
             .help("Step one or if an argument is given N instructions.\nUnlike \"step\" this will skip over subroutine calls.")
-            .requires_running()
     );
     commands.add(
         Command::new("finish", cmd_finish)
-            .description("Execute until the current function returns")
-            .requires_running(),
+            .description("Execute until the current function returns"),
     );
 }
 
@@ -71,7 +63,7 @@ fn cmd_run(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 }
 
 fn cmd_call(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
-    let module = dbg.module().unwrap();
+    let module = dbg.get_file()?.module();
     let func_index = args[0].as_u32();
     let args = &args[1..];
 

@@ -14,8 +14,7 @@ pub fn add_cmds(commands: &mut Commands) {
         Command::new("locals", cmd_locals)
             .takes_args("[all|COUNT:usize]")
             .description("Print locals")
-            .help("Print the values of the locals of the current function")
-            .requires_running(),
+            .help("Print the values of the locals of the current function"),
     );
     commands.add(
         Command::new("disassemble", cmd_disassemble)
@@ -23,37 +22,26 @@ pub fn add_cmds(commands: &mut Commands) {
             .alias("disass")
             .takes_args("[FUNC_INDEX:u32]")
             .description("Disassemble code")
-            .help("Disassemble the current function or the one with the specified index.")
-            .requires_file(),
+            .help("Disassemble the current function or the one with the specified index."),
     );
-    commands.add(
-        Command::new("stack", cmd_stack)
-            .description("Print the current value stack")
-            .requires_running(),
-    );
+    commands.add(Command::new("stack", cmd_stack).description("Print the current value stack"));
     commands.add(
         Command::new("labels", cmd_labels)
             .takes_args("[all|COUNT:usize]")
-            .description("Print the current label stack")
-            .requires_running(),
+            .description("Print the current label stack"),
     );
     commands.add(
         Command::new("backtrace", cmd_backtrace)
             .takes_args("[all|COUNT:usize]")
-            .description("Print a function backtrace")
-            .requires_running(),
+            .description("Print a function backtrace"),
     );
-    commands.add(
-        Command::new("context", cmd_context)
-            .description("Show current execution context")
-            .requires_running(),
-    );
+    commands
+        .add(Command::new("context", cmd_context).description("Show current execution context"));
 
     commands.add(
         Command::new("globals", cmd_globals)
             .description("Print globals")
-            .description("Print the values of the globals")
-            .requires_running(),
+            .description("Print the values of the globals"),
     );
 }
 
@@ -119,7 +107,7 @@ fn cmd_disassemble(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
 }
 
 fn cmd_stack(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    let value_stack = dbg.vm().unwrap().value_stack();
+    let value_stack = dbg.get_vm()?.value_stack();
     if value_stack.is_empty() {
         println!("<empty>");
         return Ok(());

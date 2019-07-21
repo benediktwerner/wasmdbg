@@ -142,10 +142,6 @@ impl Debugger {
         self.file.as_ref()
     }
 
-    pub fn module(&self) -> Option<&Module> {
-        Some(self.file.as_ref()?.module())
-    }
-
     pub fn vm(&self) -> Option<&VM> {
         self.vm.as_ref()
     }

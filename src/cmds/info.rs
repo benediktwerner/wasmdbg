@@ -1,4 +1,4 @@
-use parity_wasm::elements::{External, Instruction, Type::Function, FunctionType};
+use parity_wasm::elements::{External, FunctionType, Instruction, Type::Function};
 
 use wasmdbg::vm::{CodePosition, Trap};
 use wasmdbg::Debugger;
@@ -18,68 +18,49 @@ pub fn add_cmds(commands: &mut Commands) {
                     .description("Print breakpoints"),
             )
             .add_subcommand(
-                Command::new("ip", cmd_info_ip)
-                    .description("Print instruction pointer")
-                    .requires_running(),
+                Command::new("ip", cmd_info_ip).description("Print instruction pointer"),
+            )
+            .add_subcommand(Command::new("types", cmd_info_types).description("Print type section"))
+            .add_subcommand(
+                Command::new("imports", cmd_info_imports).description("Print import section"),
             )
             .add_subcommand(
-                Command::new("types", cmd_info_types)
-                    .description("Print type section"),
+                Command::new("functions", cmd_info_functions).description("Print function section"),
             )
             .add_subcommand(
-                Command::new("imports", cmd_info_imports)
-                    .description("Print import section"),
+                Command::new("tables", cmd_info_tables).description("Print table section"),
             )
             .add_subcommand(
-                Command::new("functions", cmd_info_functions)
-                    .description("Print function section"),
+                Command::new("memory", cmd_info_memory).description("Print memory section"),
             )
             .add_subcommand(
-                Command::new("tables", cmd_info_tables)
-                    .description("Print table section"),
+                Command::new("global", cmd_info_globals).description("Print global section"),
             )
             .add_subcommand(
-                Command::new("memory", cmd_info_memory)
-                    .description("Print memory section"),
+                Command::new("export", cmd_info_exports).description("Print export section"),
             )
             .add_subcommand(
-                Command::new("global", cmd_info_globals)
-                    .description("Print global section"),
+                Command::new("start", cmd_info_start).description("Print start section"),
             )
             .add_subcommand(
-                Command::new("export", cmd_info_exports)
-                    .description("Print export section"),
+                Command::new("element", cmd_info_elements).description("Print element section"),
             )
-            .add_subcommand(
-                Command::new("start", cmd_info_start)
-                    .description("Print start section"),
-            )
-            .add_subcommand(
-                Command::new("element", cmd_info_elements)
-                    .description("Print element section"),
-            )
-            .add_subcommand(
-                Command::new("data", cmd_info_data)
-                    .description("Print data section"),
-            )
+            .add_subcommand(Command::new("data", cmd_info_data).description("Print data section"))
             .add_subcommand(
                 Command::new("custom", cmd_info_custom)
                     .takes_args("[INDEX:u32|NAME:str]")
                     .description("Print custom sections"),
             )
             .alias("i")
-            .description("Print info about the programm being debugged")
-            .requires_file(),
+            .description("Print info about the programm being debugged"),
     );
     commands.add(
-        Command::new("status", cmd_status)
-            .description("Print status of the current wasm instance")
-            .requires_running(),
+        Command::new("status", cmd_status).description("Print status of the current wasm instance"),
     );
 }
 
 fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    let file = dbg.file().unwrap();
+    let file = dbg.get_file()?;
     let module = file.module();
 
     println!("File: {}", file.file_path());
@@ -105,18 +86,27 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
             }
             println!("{} imports", import_sec.entries().len());
             if func_count > 0 {
-                println!(" -> {} function imports (currently not supported)", func_count);
+                println!(
+                    " -> {} function imports (currently not supported)",
+                    func_count
+                );
             }
             if table_count > 0 {
                 println!(" -> {} table imports (currently not supported)", func_count);
             }
             if memory_count > 0 {
-                println!(" -> {} memory imports (currently not supported)", memory_count);
+                println!(
+                    " -> {} memory imports (currently not supported)",
+                    memory_count
+                );
             }
             if global_count > 0 {
-                println!(" -> {} global imports (currently not supported)", global_count);
+                println!(
+                    " -> {} global imports (currently not supported)",
+                    global_count
+                );
             }
-        },
+        }
         None => println!("No import section"),
     }
 
@@ -136,13 +126,17 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
             for (i, entry) in memory_sec.entries().iter().enumerate() {
                 let limits = entry.limits();
                 if let Some(max) = limits.maximum() {
-                    println!(" -> Memory #{}: Min. 0x{:x}, Max. 0x{:x}", i, limits.initial(), max);
-                }
-                else {
+                    println!(
+                        " -> Memory #{}: Min. 0x{:x}, Max. 0x{:x}",
+                        i,
+                        limits.initial(),
+                        max
+                    );
+                } else {
                     println!(" -> Memory #{}: Min. 0x{:x}", i, limits.initial());
                 }
             }
-        },
+        }
         None => println!("No memory section"),
     }
 
@@ -175,12 +169,17 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
                         Some(Instruction::GetGlobal(index)) => format!("of global {}", index),
                         Some(Instruction::I32Const(value)) => format!("{}", value),
                         _ => String::from("0"),
-                    }
+                    },
                     None => String::from("0"),
                 };
-                println!(" -> for memory {} at offset {} for 0x{:x} bytes", entry.index(), offset, entry.value().len());
+                println!(
+                    " -> for memory {} at offset {} for 0x{:x} bytes",
+                    entry.index(),
+                    offset,
+                    entry.value().len()
+                );
             }
-        },
+        }
         None => println!("No data section"),
     }
 
@@ -192,7 +191,11 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     if module.custom_sections().next().is_some() {
         println!("{} custom sections", module.custom_sections().count());
         for custom_sec in module.custom_sections() {
-            println!(" -> {}: {} bytes", custom_sec.name(), custom_sec.payload().len());
+            println!(
+                " -> {}: {} bytes",
+                custom_sec.name(),
+                custom_sec.payload().len()
+            );
         }
     }
 
@@ -218,7 +221,7 @@ fn cmd_info_break(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 }
 
 fn cmd_info_ip(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    let ip = dbg.vm().unwrap().ip();
+    let ip = dbg.get_vm()?.ip();
     println!("Function: {}", ip.func_index);
     println!("Instruction: {}", ip.instr_index);
     Ok(())
@@ -246,10 +249,17 @@ fn cmd_info_imports(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
             for entry in sec.entries() {
                 match entry.external() {
                     External::Function(type_index) => {
-                        let Function(func_type) = &module.type_section().unwrap().types()[*type_index as usize];
+                        let Function(func_type) =
+                            &module.type_section().unwrap().types()[*type_index as usize];
                         // TODO: group functions from the same module
-                        println!("Function {}\t{:<20}\twith type {:>3}: {}", entry.module(), entry.field(), type_index, func_type_str(func_type));
-                    },
+                        println!(
+                            "Function {}\t{:<20}\twith type {:>3}: {}",
+                            entry.module(),
+                            entry.field(),
+                            type_index,
+                            func_type_str(func_type)
+                        );
+                    }
                     External::Table(table_type) => println!("Table: {:?}", table_type),
                     External::Memory(memory_type) => println!("Memory: {:?}", memory_type),
                     External::Global(global_type) => println!("Global: {:?}", global_type),
@@ -307,7 +317,7 @@ fn cmd_info_custom(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 }
 
 fn cmd_status(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    if let Some(trap) = dbg.vm().unwrap().trap() {
+    if let Some(trap) = dbg.get_vm()?.trap() {
         if let Trap::ExecutionFinished = trap {
             println!("Finished execution");
         } else {
@@ -315,7 +325,7 @@ fn cmd_status(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
         }
     } else {
         println!("No trap");
-        let ip = dbg.vm().unwrap().ip();
+        let ip = dbg.get_vm()?.ip();
         println!("Function: {}", ip.func_index);
         println!("Instruction: {}", ip.instr_index);
     }
@@ -323,7 +333,12 @@ fn cmd_status(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 }
 
 fn func_type_str(func_type: &FunctionType) -> String {
-    let params = func_type.params().iter().map(|t| t.to_string()).collect::<Vec<String>>().join(", ");
+    let params = func_type
+        .params()
+        .iter()
+        .map(|t| t.to_string())
+        .collect::<Vec<String>>()
+        .join(", ");
     let return_type = match func_type.return_type() {
         Some(return_type) => return_type.to_string(),
         None => String::from("()"),
