@@ -271,47 +271,47 @@ fn cmd_info_imports(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_info_functions(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+fn cmd_info_functions(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     println!("Not implemented");
     Ok(())
 }
 
-fn cmd_info_tables(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+fn cmd_info_tables(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     println!("Not implemented");
     Ok(())
 }
 
-fn cmd_info_memory(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+fn cmd_info_memory(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     println!("Not implemented");
     Ok(())
 }
 
-fn cmd_info_globals(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+fn cmd_info_globals(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     println!("Not implemented");
     Ok(())
 }
 
-fn cmd_info_exports(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+fn cmd_info_exports(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     println!("Not implemented");
     Ok(())
 }
 
-fn cmd_info_start(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+fn cmd_info_start(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     println!("Not implemented");
     Ok(())
 }
 
-fn cmd_info_elements(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+fn cmd_info_elements(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     println!("Not implemented");
     Ok(())
 }
 
-fn cmd_info_data(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+fn cmd_info_data(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     println!("Not implemented");
     Ok(())
 }
 
-fn cmd_info_custom(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+fn cmd_info_custom(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     println!("Not implemented");
     Ok(())
 }
