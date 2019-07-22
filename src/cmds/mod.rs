@@ -380,11 +380,22 @@ impl CommandHandler {
             return;
         }
 
-        match self.commands.find_by_name(cmd_name) {
-            Some(cmd) => {
+        let mut args = cmd_name.split_whitespace();
+        match self.commands.find_by_name(args.next().unwrap()) {
+            Some(mut cmd) => {
+                while cmd.is_subcommand() {
+                    if let Some(subcmd) = args.next() {
+                        match cmd.subcommands.find_by_name(subcmd) {
+                            Some(subcmd) => cmd = subcmd,
+                            None => println!("Unknown subcommand: \"{}\".", subcmd),
+                        }
+                    } else {
+                        break;
+                    }
+                }
                 println!(
                     "Usage: {} {}",
-                    cmd.name,
+                    cmd_name,
                     cmd.args
                         .iter()
                         .map(|a| a.to_string())
