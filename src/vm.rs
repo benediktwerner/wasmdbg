@@ -66,6 +66,8 @@ pub enum Trap {
     InvalidBranchIndex,
     #[fail(display = "Out of range memory access at address {:#08x}", _0)]
     MemoryAccessOutOfRange(u32),
+    #[fail(display = "Tried to call imported function: {} (unsupported)", _0)]
+    UnsupportedCallToImportedFunction(u32),
 }
 
 pub type VMResult<T> = Result<T, Trap>;
@@ -567,6 +569,10 @@ impl VM {
     #[allow(clippy::float_cmp, clippy::redundant_closure)]
     fn execute_step_internal(&mut self) -> VMResult<()> {
         let func = self.module.get_func(self.ip.func_index).unwrap();
+        if func.is_imported() {
+            return Err(Trap::UnsupportedCallToImportedFunction(self.ip.func_index));
+        }
+
         let instr = func.instructions()[self.ip.instr_index as usize].clone();
         println!("{} {}", self.ip, instr);
         self.ip.instr_index += 1;

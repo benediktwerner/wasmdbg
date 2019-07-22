@@ -99,19 +99,15 @@ impl Function {
     pub fn name(&self) -> &str {
         &self.name
     }
-
     pub fn func_type(&self) -> &FunctionType {
         &self.func_type
     }
-
-    pub fn imported(&self) -> bool {
+    pub fn is_imported(&self) -> bool {
         self.imported
     }
-
     pub fn locals(&self) -> &[ValueType] {
         &self.locals
     }
-
     pub fn instructions(&self) -> &[Instruction] {
         &self.instructions
     }
