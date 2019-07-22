@@ -109,7 +109,7 @@ pub enum Format {
 }
 
 impl Format {
-    pub fn format<T: Formattable>(&self, val: T) -> String {
+    pub fn format<T: Formattable>(self, val: T) -> String {
         let size = std::mem::size_of::<T>();
         match self {
             Format::Decimal => val.fmt_signed(),
