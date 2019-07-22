@@ -323,24 +323,23 @@ impl CommandHandler {
         let mut line_iter = line
             .trim()
             .splitn(2, |c: char| c.is_whitespace() || c == '/');
-        let cmd_name = line_iter.next();
+        let cmd_name = line_iter.next().unwrap();
 
-        if let Some(cmd_name) = cmd_name {
-            match cmd_name {
-                "help" => self.print_help(line_iter.next().unwrap_or("")),
-                "quit" | "exit" => {
-                    return true;
+        match cmd_name {
+            "help" => self.print_help(line_iter.next().unwrap_or("")),
+            "quit" | "exit" => {
+                return true;
+            }
+            "" => {
+                if let Some(last_line) = self.last_line.clone() {
+                    self.handle_line(dbg, &last_line);
                 }
-                _ => match self.commands.find_by_name(cmd_name) {
-                    Some(cmd) => cmd.handle(dbg, line_iter.next().unwrap_or("")),
-                    None => println!("Unknown command: \"{}\". Try \"help\".", cmd_name),
-                },
+                return false;
             }
-        } else {
-            if let Some(last_line) = self.last_line.clone() {
-                self.handle_line(dbg, &last_line);
-            }
-            return false;
+            _ => match self.commands.find_by_name(cmd_name) {
+                Some(cmd) => cmd.handle(dbg, line_iter.next().unwrap_or("")),
+                None => println!("Unknown command: \"{}\". Try \"help\".", cmd_name),
+            },
         }
 
         self.last_line = Some(line.to_string());
