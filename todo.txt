@@ -3,7 +3,8 @@ try out a ctf binary
 format disassembly
 read debug symbols
 use debug symbols for function names
-Rainbow color theme
+watchpoints
+wasi
 
 Ideas:
 record execution
