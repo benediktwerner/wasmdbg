@@ -887,8 +887,6 @@ impl VM {
             Instruction::I64ReinterpretF64 => self.unop(|x: F64| x.to_bits())?,
             Instruction::F32ReinterpretI32 => self.unop(F32::from_bits)?,
             Instruction::F64ReinterpretI64 => self.unop(F64::from_bits)?,
-
-            _ => return Err(Trap::UnknownInstruction(instr)),
         }
 
         if self.label_stack.is_empty() {

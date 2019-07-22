@@ -13,7 +13,6 @@ pub enum Value {
     I64(u64),
     F32(F32),
     F64(F64),
-    V128(u128),
 }
 
 impl Value {
@@ -23,7 +22,6 @@ impl Value {
             ValueType::I64 => Value::I64(0),
             ValueType::F32 => Value::F32(F32::default()),
             ValueType::F64 => Value::F64(F64::default()),
-            ValueType::V128 => Value::V128(0),
         }
     }
 
@@ -33,7 +31,6 @@ impl Value {
             Value::I64(_) => ValueType::I64,
             Value::F32(_) => ValueType::F32,
             Value::F64(_) => ValueType::F64,
-            Value::V128(_) => ValueType::V128,
         }
     }
 
@@ -47,7 +44,6 @@ impl Value {
             ValueType::I64 => Value::I64(i128::from_str(s).ok()? as u64),
             ValueType::F32 => Value::from(f32::from_str(s).ok()?),
             ValueType::F64 => Value::from(f64::from_str(s).ok()?),
-            ValueType::V128 => Value::V128(u128::from_str(s).ok()?),
         })
     }
 }
@@ -57,26 +53,25 @@ impl fmt::Display for Value {
         match *self {
             Value::I32(val) => {
                 if (val as i32) < 0 {
-                    write!(f, " i32 : 0x{0:08x} = {0} = {1}", val, val as i32)
+                    write!(f, "i32 : 0x{0:08x} = {0} = {1}", val, val as i32)
                 } else {
-                    write!(f, " i32 : 0x{0:08x} = {0}", val)
+                    write!(f, "i32 : 0x{0:08x} = {0}", val)
                 }
             }
             Value::I64(val) => {
                 if (val as i64) < 0 {
-                    write!(f, " i64 : 0x{0:016x} = {0} = {1}", val, val as i64)
+                    write!(f, "i64 : 0x{0:016x} = {0} = {1}", val, val as i64)
                 } else {
-                    write!(f, " i64 : 0x{0:016x} = {0}", val)
+                    write!(f, "i64 : 0x{0:016x} = {0}", val)
                 }
             }
-            Value::F32(val) => write!(f, " f32 : 0x{:08x} ~ {:.8}", val.to_bits(), val.to_float()),
+            Value::F32(val) => write!(f, "f32 : 0x{:08x} ~ {:.8}", val.to_bits(), val.to_float()),
             Value::F64(val) => write!(
                 f,
-                " f64 : 0x{:016x} ~ {:.16}",
+                "f64 : 0x{:016x} ~ {:.16}",
                 val.to_bits(),
                 val.to_float()
             ),
-            Value::V128(val) => write!(f, "v128 : 0x{:032x}", val),
         }
     }
 }
@@ -121,11 +116,6 @@ impl From<F64> for Value {
         Value::F64(val)
     }
 }
-impl From<u128> for Value {
-    fn from(val: u128) -> Self {
-        Value::V128(val)
-    }
-}
 
 pub trait Number: Into<Value> + Copy + Any + fmt::Display {
     fn value_type() -> ValueType;
@@ -155,7 +145,6 @@ impl_number!(f32, F32);
 impl_number!(f64, F64);
 impl_number!(F32, F32);
 impl_number!(F64, F64);
-impl_number!(u128, V128);
 
 pub trait Integer<T> {
     fn leading_zeros(self) -> T;
