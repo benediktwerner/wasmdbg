@@ -1,6 +1,5 @@
-use parity_wasm::elements::{External, FunctionType, Instruction, Type::Function};
-
 use wasmdbg::vm::{CodePosition, Trap};
+use wasmdbg::wasm::{External, InitExpr};
 use wasmdbg::Debugger;
 
 use super::{CmdArg, CmdResult, Command, Commands};
@@ -64,132 +63,88 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     let module = file.module();
 
     println!("File: {}", file.file_path());
+    println!("{} types", module.types().len());
 
-    match module.type_section() {
-        Some(type_sec) => println!("{} types", type_sec.types().len()),
-        None => println!("No type section"),
-    }
-
-    match module.import_section() {
-        Some(import_sec) => {
-            let mut func_count = 0;
-            let mut table_count = 0;
-            let mut memory_count = 0;
-            let mut global_count = 0;
-            for entry in import_sec.entries() {
-                match entry.external() {
-                    External::Function(_) => func_count += 1,
-                    External::Table(_) => table_count += 1,
-                    External::Memory(_) => memory_count += 1,
-                    External::Global(_) => global_count += 1,
-                }
-            }
-            println!("{} imports", import_sec.entries().len());
-            if func_count > 0 {
-                println!(
-                    " -> {} function imports (currently not supported)",
-                    func_count
-                );
-            }
-            if table_count > 0 {
-                println!(" -> {} table imports (currently not supported)", func_count);
-            }
-            if memory_count > 0 {
-                println!(
-                    " -> {} memory imports (currently not supported)",
-                    memory_count
-                );
-            }
-            if global_count > 0 {
-                println!(
-                    " -> {} global imports (currently not supported)",
-                    global_count
-                );
+    {
+        let mut func_count = 0;
+        let mut table_count = 0;
+        let mut memory_count = 0;
+        let mut global_count = 0;
+        for entry in module.imports() {
+            match entry.external() {
+                External::Function(_) => func_count += 1,
+                External::Table(_) => table_count += 1,
+                External::Memory(_) => memory_count += 1,
+                External::Global(_) => global_count += 1,
             }
         }
-        None => println!("No import section"),
-    }
-
-    match module.function_section() {
-        Some(func_sec) => println!("{} functions", func_sec.entries().len()),
-        None => println!("No function section"),
-    }
-
-    match module.table_section() {
-        Some(table_sec) => println!("{} tables", table_sec.entries().len()),
-        None => println!("No table section"),
-    }
-
-    match module.memory_section() {
-        Some(memory_sec) => {
-            println!("{} linear memories", memory_sec.entries().len());
-            for (i, entry) in memory_sec.entries().iter().enumerate() {
-                let limits = entry.limits();
-                if let Some(max) = limits.maximum() {
-                    println!(
-                        " -> Memory #{}: Min. 0x{:x}, Max. 0x{:x}",
-                        i,
-                        limits.initial(),
-                        max
-                    );
-                } else {
-                    println!(" -> Memory #{}: Min. 0x{:x}", i, limits.initial());
-                }
-            }
+        println!("{} imports", module.imports().len());
+        if func_count > 0 {
+            println!(
+                " -> {} function imports (currently not supported)",
+                func_count
+            );
         }
-        None => println!("No memory section"),
+        if table_count > 0 {
+            println!(" -> {} table imports (currently not supported)", func_count);
+        }
+        if memory_count > 0 {
+            println!(
+                " -> {} memory imports (currently not supported)",
+                memory_count
+            );
+        }
+        if global_count > 0 {
+            println!(
+                " -> {} global imports (currently not supported)",
+                global_count
+            );
+        }
     }
 
-    match module.global_section() {
-        Some(global_sec) => println!("{} globals", global_sec.entries().len()),
-        None => println!("No global section"),
+    println!("{} functions", module.functions().len());
+    println!("{} tables", module.tables().len());
+
+    println!("{} linear memories", module.memories().len());
+
+    for (i, entry) in module.memories().iter().enumerate() {
+        let limits = entry.limits();
+        if let Some(max) = limits.maximum() {
+            println!(
+                " -> Memory #{}: Min. 0x{:x}, Max. 0x{:x}",
+                i,
+                limits.initial(),
+                max
+            );
+        } else {
+            println!(" -> Memory #{}: Min. 0x{:x}", i, limits.initial());
+        }
     }
 
-    match module.export_section() {
-        Some(export_sec) => println!("{} exports", export_sec.entries().len()),
-        None => println!("No export section"),
-    }
+    println!("{} globals", module.globals().len());
+    println!("{} exports", module.exports().len());
 
-    match module.start_section() {
-        Some(start_sec) => println!("Start function: #{}", start_sec),
+    match module.start_func() {
+        Some(start_func) => println!("Start function: #{}", start_func),
         None => println!("No start section"),
     }
 
-    match module.elements_section() {
-        Some(element_sec) => println!("{} table initializers", element_sec.entries().len()),
-        None => println!("No elements section"),
+    println!("{} data initializers", module.data_entries().len());
+    for entry in module.data_entries() {
+        let offset = match entry.offset() {
+            InitExpr::Const(val) => format!("{}", val.to::<u32>().unwrap()),
+            InitExpr::Global(index) => format!("of global {}", index),
+        };
+        println!(
+            " -> for memory {} at offset {} for 0x{:x} bytes",
+            entry.index(),
+            offset,
+            entry.value().len()
+        );
     }
 
-    match module.data_section() {
-        Some(data_sec) => {
-            println!("{} data initializers", data_sec.entries().len());
-            for entry in data_sec.entries() {
-                let offset = match entry.offset() {
-                    Some(offset) => match offset.code().get(0) {
-                        Some(Instruction::GetGlobal(index)) => format!("of global {}", index),
-                        Some(Instruction::I32Const(value)) => format!("{}", value),
-                        _ => String::from("0"),
-                    },
-                    None => String::from("0"),
-                };
-                println!(
-                    " -> for memory {} at offset {} for 0x{:x} bytes",
-                    entry.index(),
-                    offset,
-                    entry.value().len()
-                );
-            }
-        }
-        None => println!("No data section"),
-    }
-
-    match module.names_section() {
-        Some(_) => println!("Name section present"),
-        None => println!("No name section"),
-    }
-
-    if module.custom_sections().next().is_some() {
-        println!("{} custom sections", module.custom_sections().count());
+    if !module.custom_sections().is_empty() {
+        println!("{} custom sections", module.custom_sections().len());
         for custom_sec in module.custom_sections() {
             println!(
                 " -> {}: {} bytes",
@@ -228,45 +183,34 @@ fn cmd_info_ip(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 }
 
 fn cmd_info_types(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    match dbg.get_file()?.module().type_section() {
-        Some(sec) => {
-            println!("{} types", sec.types().len());
-            for (i, entry) in sec.types().iter().enumerate() {
-                let Function(func_type) = entry;
-                println!("Type {:>2}: {}", i, func_type_str(func_type));
-            }
-        }
-        None => println!("No type section"),
+    let types = dbg.get_file()?.module().types();
+    println!("{} types", types.len());
+    for (i, entry) in types.iter().enumerate() {
+        println!("Type {:>2}: {}", i, entry);
     }
     Ok(())
 }
 
 fn cmd_info_imports(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     let module = dbg.get_file()?.module();
-    match module.import_section() {
-        Some(sec) => {
-            println!("{} imports", sec.entries().len());
-            for entry in sec.entries() {
-                match entry.external() {
-                    External::Function(type_index) => {
-                        let Function(func_type) =
-                            &module.type_section().unwrap().types()[*type_index as usize];
-                        // TODO: group functions from the same module
-                        println!(
-                            "Function {}\t{:<20}\twith type {:>3}: {}",
-                            entry.module(),
-                            entry.field(),
-                            type_index,
-                            func_type_str(func_type)
-                        );
-                    }
-                    External::Table(table_type) => println!("Table: {:?}", table_type),
-                    External::Memory(memory_type) => println!("Memory: {:?}", memory_type),
-                    External::Global(global_type) => println!("Global: {:?}", global_type),
-                }
+    println!("{} imports", module.imports().len());
+    for entry in module.imports() {
+        match entry.external() {
+            External::Function(type_index) => {
+                let func_type = &module.types()[*type_index as usize];
+                // TODO: group functions from the same module
+                println!(
+                    "Function {}\t{:<20}\twith type {:>3}: {}",
+                    entry.module(),
+                    entry.field(),
+                    type_index,
+                    func_type
+                );
             }
+            External::Table(table_type) => println!("Table: {:?}", table_type),
+            External::Memory(memory_type) => println!("Memory: {:?}", memory_type),
+            External::Global(global_type) => println!("Global: {:?}", global_type),
         }
-        None => println!("No import section"),
     }
     Ok(())
 }
@@ -330,18 +274,4 @@ fn cmd_status(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
         println!("Instruction: {}", ip.instr_index);
     }
     Ok(())
-}
-
-fn func_type_str(func_type: &FunctionType) -> String {
-    let params = func_type
-        .params()
-        .iter()
-        .map(|t| t.to_string())
-        .collect::<Vec<String>>()
-        .join(", ");
-    let return_type = match func_type.return_type() {
-        Some(return_type) => return_type.to_string(),
-        None => String::from("()"),
-    };
-    format!("fn ({}) -> {}", params, return_type)
 }

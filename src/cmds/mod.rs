@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use failure::Error;
 
-use wasmdbg::{Debugger, LoadError};
+use wasmdbg::Debugger;
 
 mod context;
 mod execution;
@@ -409,12 +409,7 @@ impl CommandHandler {
 
 pub fn load_file(dbg: &mut Debugger, file_path: &str) {
     if let Err(error) = dbg.load_file(file_path) {
-        match error {
-            LoadError::FileNotFound => println!("File not found: \"{}\"", file_path),
-            LoadError::SerializationError(serialization_error) => {
-                println!("Error while loading file: {}", serialization_error)
-            }
-        }
+        println!("{}", error);
     } else {
         println!("Loaded \"{}\"", file_path);
     }

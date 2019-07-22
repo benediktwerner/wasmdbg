@@ -3,29 +3,28 @@ extern crate parity_wasm;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use parity_wasm::elements::{
-    FuncBody, FunctionType, InitExpr, Instruction, Module, ResizableLimits, TableType,
-    Type::Function, ValueType,
-};
-
 use crate::nan_preserving_float::{F32, F64};
 use crate::value::{ExtendTo, Integer, LittleEndianConvert, Number, Value, WrapTo};
+use crate::wasm::{Function, InitExpr, Instruction, Module, ResizableLimits, TableType, ValueType};
 use crate::Breakpoints;
 
 #[derive(Debug, Fail)]
 pub enum InitError {
     #[fail(display = "Initalizer contains global.get which requires imports (unimplemented)")]
-    InitExprGlobalGetUnimplemented,
-    #[fail(display = "Initializer contains invalid instruction: {}", _0)]
-    InitExprInvalidInstruction(Instruction),
+    GlobalGetUnimplemented,
     #[fail(
         display = "Initializer type mismatch. Expected \"{}\", found \"{}\"",
         expected, found
     )]
-    InitMismatchedType {
+    MismatchedType {
         expected: ValueType,
         found: ValueType,
     },
+    #[fail(
+        display = "Memory offset expr has invalid type. Expected \"I32\", found \"{}\"",
+        _0
+    )]
+    MemoryOffsetInvalidType(ValueType),
 }
 
 #[derive(Clone, Debug, Fail)]
@@ -120,28 +119,25 @@ impl Memory {
     }
 
     fn from_module(module: &Module) -> Result<Self, InitError> {
-        if let Some(memory_section) = module.memory_section() {
-            if let Some(memory) = memory_section.entries().get(0) {
-                let limits = *memory.limits();
-                let mut data = vec![0; (limits.initial() as usize) * PAGE_SIZE];
+        if let Some(memory) = module.memories().get(0) {
+            let limits = *memory.limits();
+            let mut data = vec![0; (limits.initial() as usize) * PAGE_SIZE];
 
-                if let Some(data_section) = module.data_section() {
-                    for data_segment in data_section.entries() {
-                        if data_segment.index() == 0 {
-                            let offset = match data_segment.offset() {
-                                Some(offset_expr) => {
-                                    eval_init_expr(offset_expr)?.to::<u32>().unwrap_or(0)
-                                }
-                                None => 0,
-                            } as usize;
-                            let len = data_segment.value().len();
-                            data[offset..offset + len].copy_from_slice(data_segment.value());
+            for data_segment in module.data_entries() {
+                if data_segment.index() == 0 {
+                    let offset = eval_init_expr(data_segment.offset())?;
+                    let offset = match offset.to::<u32>() {
+                        Some(val) => val as usize,
+                        None => {
+                            return Err(InitError::MemoryOffsetInvalidType(offset.value_type()))
                         }
-                    }
+                    };
+                    let len = data_segment.value().len();
+                    data[offset..offset + len].copy_from_slice(data_segment.value());
                 }
-
-                return Ok(Memory { data, limits });
             }
+
+            return Ok(Memory { data, limits });
         }
         Ok(Self::new())
     }
@@ -151,7 +147,7 @@ impl Memory {
     }
 
     fn grow(&mut self, delta: u32) -> u32 {
-        // TODO: check if maximum reached and fail (return -1)
+        // TODO: limit growth
         let page_count = self.page_count();
         if let Some(max) = self.limits.maximum() {
             if page_count + delta > max {
@@ -168,7 +164,6 @@ impl Memory {
     }
 
     pub fn load<T: LittleEndianConvert>(&self, address: u32) -> VMResult<T> {
-        // TODO: check memory access
         let size = core::mem::size_of::<T>();
         let address = address as usize;
         let bytes = self
@@ -179,7 +174,6 @@ impl Memory {
     }
 
     fn store<T: LittleEndianConvert>(&mut self, address: u32, value: T) -> VMResult<()> {
-        // TODO: check memory access
         let size = core::mem::size_of::<T>();
         let address = address as usize;
         let bytes = self
@@ -221,23 +215,18 @@ impl Table {
     }
 
     fn from_module(module: &Module) -> Option<Table> {
-        if let Some(table_section) = module.table_section() {
-            if let Some(default_table_type) = table_section.entries().get(0) {
-                return Some(Table::new(*default_table_type));
-            }
+        if let Some(default_table_type) = module.tables().get(0) {
+            // TODO: Init table!!
+            return Some(Table::new(*default_table_type));
         }
         None
     }
 }
 
 fn eval_init_expr(init_expr: &InitExpr) -> Result<Value, InitError> {
-    let val: Value = match &init_expr.code()[0] {
-        Instruction::I32Const(val) => (*val).into(),
-        Instruction::I64Const(val) => (*val).into(),
-        Instruction::F32Const(val) => (*val).into(),
-        Instruction::F64Const(val) => (*val).into(),
-        Instruction::GetGlobal(_) => return Err(InitError::InitExprGlobalGetUnimplemented),
-        instr => return Err(InitError::InitExprInvalidInstruction(instr.clone())),
+    let val = match init_expr {
+        InitExpr::Const(val) => *val,
+        InitExpr::Global(_) => return Err(InitError::GlobalGetUnimplemented),
     };
     Ok(val)
 }
@@ -257,25 +246,17 @@ pub struct VM {
 
 impl VM {
     pub fn new(module: Rc<Module>, breakpoints: Rc<RefCell<Breakpoints>>) -> Result<VM, InitError> {
-        // TODO: Validate module
-
-        let globals = match module.global_section() {
-            Some(global_section) => {
-                let mut globals = Vec::with_capacity(global_section.entries().len());
-                for global in global_section.entries() {
-                    let val = eval_init_expr(global.init_expr())?;
-                    if val.value_type() != global.global_type().content_type() {
-                        return Err(InitError::InitMismatchedType {
-                            expected: global.global_type().content_type(),
-                            found: val.value_type(),
-                        });
-                    }
-                    globals.push(val);
-                }
-                globals
+        let mut globals = Vec::with_capacity(module.globals().len());
+        for global in module.globals() {
+            let val = eval_init_expr(global.init_expr())?;
+            if val.value_type() != global.global_type().content_type() {
+                return Err(InitError::MismatchedType {
+                    expected: global.global_type().content_type(),
+                    found: val.value_type(),
+                });
             }
-            None => Vec::new(),
-        };
+            globals.push(val);
+        }
         let memory = Memory::from_module(&module)?;
         let table = Table::from_module(&module);
 
@@ -344,7 +325,7 @@ impl VM {
         Err(Trap::NoFunctionFrame)
     }
 
-    fn curr_func(&self) -> VMResult<&FuncBody> {
+    fn curr_func(&self) -> VMResult<&Function> {
         self.module
             .get_func(self.ip.func_index)
             .ok_or_else(|| Trap::NoFunctionWithIndex(self.ip.func_index))
@@ -362,8 +343,8 @@ impl VM {
             Label::Unbound => {
                 index += 1;
                 loop {
-                    let curr_func_code = self.curr_func()?.code().elements();
-                    match curr_func_code[self.ip.instr_index as usize] {
+                    let curr_code = self.curr_func()?.instructions();
+                    match curr_code[self.ip.instr_index as usize] {
                         Instruction::Block(_) => index += 1,
                         Instruction::Loop(_) => index += 1,
                         Instruction::If(_) => index += 1,
@@ -386,8 +367,8 @@ impl VM {
     fn branch_else(&mut self) -> VMResult<()> {
         let mut index = 1;
         loop {
-            let curr_func_code = self.curr_func()?.code().elements();
-            match curr_func_code[self.ip.instr_index as usize] {
+            let curr_code = self.curr_func()?.instructions();
+            match curr_code[self.ip.instr_index as usize] {
                 Instruction::Block(_) => index += 1,
                 Instruction::Loop(_) => index += 1,
                 Instruction::If(_) => index += 1,
@@ -478,12 +459,12 @@ impl VM {
     }
 
     fn call(&mut self, index: u32) -> VMResult<()> {
-        let func_type = self
+        let func = self
             .module
-            .get_func_type(index)
+            .get_func(index)
             .ok_or_else(|| Trap::NoFunctionWithIndex(index))?;
 
-        let params_count = func_type.params().len();
+        let params_count = func.func_type().params().len();
         let mut locals = Vec::new();
 
         for _ in 0..params_count {
@@ -491,15 +472,8 @@ impl VM {
         }
         locals.reverse();
 
-        let func = self
-            .module
-            .get_func(index)
-            .ok_or_else(|| Trap::NoFunctionWithIndex(index))?;
-        for local in func.locals() {
-            let default_val = Value::default(local.value_type());
-            for _ in 0..local.count() {
-                locals.push(default_val);
-            }
+        for local_type in self.module.get_func(index).unwrap().locals() {
+            locals.push(Value::default(*local_type));
         }
 
         self.label_stack.push(Label::Return);
@@ -517,7 +491,7 @@ impl VM {
     }
 
     pub fn run(&mut self) -> Trap {
-        if let Some(start_function) = self.module.start_section() {
+        if let Some(start_function) = self.module.start_func() {
             self.run_func(start_function)
         } else {
             Trap::NoStartFunction
@@ -593,7 +567,7 @@ impl VM {
     #[allow(clippy::float_cmp, clippy::redundant_closure)]
     fn execute_step_internal(&mut self) -> VMResult<()> {
         let func = self.module.get_func(self.ip.func_index).unwrap();
-        let instr = func.code().elements()[self.ip.instr_index as usize].clone();
+        let instr = func.instructions()[self.ip.instr_index as usize].clone();
         println!("{} {}", self.ip, instr);
         self.ip.instr_index += 1;
 
@@ -649,12 +623,12 @@ impl VM {
                     TableElement::Func(func_index) => func_index,
                     _ => return Err(Trap::IndirectCalleeAbsent),
                 };
-                let func_type = self
+                let func = self
                     .module
-                    .get_func_type_ref(func_index)
+                    .get_func(func_index)
                     .ok_or_else(|| Trap::NoFunctionWithIndex(func_index))?;
 
-                if func_type != signature {
+                if func.func_type().type_ref() != signature {
                     return Err(Trap::IndirectCallTypeMismatch);
                 }
 
@@ -928,48 +902,5 @@ fn bool_val(val: bool) -> u32 {
     match val {
         true => 1,
         false => 0,
-    }
-}
-
-pub trait ModuleHelper {
-    fn calc_func_index(&self, index: u32) -> Option<usize>;
-    fn get_func_type_ref(&self, index: u32) -> Option<u32>;
-    fn get_func_type(&self, index: u32) -> Option<&FunctionType>;
-    fn get_func(&self, index: u32) -> Option<&FuncBody>;
-}
-
-impl ModuleHelper for Module {
-    fn calc_func_index(&self, index: u32) -> Option<usize> {
-        let imported_funcs = self
-            .import_section()
-            .map(|s| s.entries().len())
-            .unwrap_or(0);
-        if (index as usize) < imported_funcs {
-            return None;
-        }
-        Some(index as usize - imported_funcs)
-    }
-
-    fn get_func_type_ref(&self, index: u32) -> Option<u32> {
-        Some(
-            self.function_section()?
-                .entries()
-                .get(self.calc_func_index(index)?)?
-                .type_ref(),
-        )
-    }
-
-    fn get_func_type(&self, index: u32) -> Option<&FunctionType> {
-        let Function(ref func_type) = self
-            .type_section()?
-            .types()
-            .get(self.get_func_type_ref(index)? as usize)?;
-        Some(func_type)
-    }
-
-    fn get_func(&self, index: u32) -> Option<&FuncBody> {
-        self.code_section()?
-            .bodies()
-            .get(self.calc_func_index(index)?)
     }
 }

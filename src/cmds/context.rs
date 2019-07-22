@@ -1,7 +1,7 @@
 use colored::*;
 use parity_wasm::elements::Instruction;
 
-use wasmdbg::vm::{CodePosition, ModuleHelper};
+use wasmdbg::vm::CodePosition;
 use wasmdbg::Debugger;
 
 use super::{CmdArg, CmdResult, Command, Commands};
@@ -82,7 +82,7 @@ fn cmd_disassemble(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
         .get_file()?
         .module()
         .get_func(index)
-        .map(|b| b.code().elements())
+        .map(|b| b.instructions())
     {
         if args.is_empty() && code.len() > DISASSEMBLY_DEFAULT_MAX_LINES {
             let ip = dbg.get_vm()?.ip();

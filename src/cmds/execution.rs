@@ -1,5 +1,5 @@
 use wasmdbg::value::Value;
-use wasmdbg::vm::{CodePosition, ModuleHelper, Trap};
+use wasmdbg::vm::{CodePosition, Trap};
 use wasmdbg::Debugger;
 
 use super::context;
@@ -68,8 +68,9 @@ fn cmd_call(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
     let args = &args[1..];
 
     let func_type = module
-        .get_func_type(func_index)
-        .ok_or_else(|| format_err!("No function with index {}", func_index))?;
+        .get_func(func_index)
+        .ok_or_else(|| format_err!("No function with index {}", func_index))?
+        .func_type();
 
     if args.len() != func_type.params().len() {
         bail!(

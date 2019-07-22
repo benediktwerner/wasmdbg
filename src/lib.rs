@@ -4,24 +4,15 @@ extern crate parity_wasm;
 
 use std::cell::{Ref, RefCell};
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 use std::rc::Rc;
-
-use parity_wasm::{elements::Module, SerializationError};
 
 pub mod nan_preserving_float;
 pub mod value;
 pub mod vm;
+pub mod wasm;
 use value::Value;
-use vm::{CodePosition, InitError, Memory, ModuleHelper, Trap, VM};
-
-#[derive(Debug, Fail)]
-pub enum LoadError {
-    #[fail(display = "File not found")]
-    FileNotFound,
-    #[fail(display = "Serialization failed: {}", _0)]
-    SerializationError(#[fail(cause)] SerializationError),
-}
+use vm::{CodePosition, InitError, Memory, Trap, VM};
+use wasm::{LoadError, Module};
 
 #[derive(Debug, Fail)]
 pub enum DebuggerError {
@@ -147,16 +138,7 @@ impl Debugger {
     }
 
     pub fn load_file(&mut self, file_path: &str) -> Result<(), LoadError> {
-        if !Path::new(file_path).exists() {
-            return Err(LoadError::FileNotFound);
-        }
-
-        let module =
-            parity_wasm::deserialize_file(file_path).map_err(LoadError::SerializationError)?;
-        let module = match module.parse_names() {
-            Ok(module) => module,
-            Err((_, module)) => module,
-        };
+        let module = Module::from_file(file_path)?;
 
         self.file = Some(File {
             file_path: file_path.to_owned(),
@@ -201,8 +183,7 @@ impl Debugger {
         let file = self.get_file_mut()?;
         if let Some(func) = file.module().get_func(breakpoint.func_index) {
             if func
-                .code()
-                .elements()
+                .instructions()
                 .get(breakpoint.instr_index as usize)
                 .is_none()
             {
