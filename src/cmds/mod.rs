@@ -41,7 +41,7 @@ impl CmdArg {
         }
     }
 
-    fn as_str(&self) -> String {
+    fn as_string(&self) -> String {
         match self {
             CmdArg::Str(val) => val.to_string(),
             CmdArg::Const(val) => val.to_string(),

@@ -22,7 +22,7 @@ pub fn add_cmds(commands: &mut Commands) {
 fn cmd_python(_dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
     let mut cmd = &mut process::Command::new("python3");
     if !args.is_empty() {
-        let expr: String = args.iter().map(|expr| expr.as_str()).collect();
+        let expr: String = args.iter().map(|expr| expr.as_string()).collect();
         let code = format!("print({})", expr);
         cmd = cmd.arg("-c").arg(code);
     }
@@ -31,7 +31,7 @@ fn cmd_python(_dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
 }
 
 fn cmd_load(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
-    let file_path = &args[0].as_str();
+    let file_path = &args[0].as_string();
     if let Err(error) = dbg.load_file(file_path) {
         println!("{}", error);
     } else {

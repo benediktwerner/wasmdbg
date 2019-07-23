@@ -83,12 +83,12 @@ fn cmd_call(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
 
     let mut args_parsed = Vec::new();
     for (arg, value_type) in args.iter().zip(func_type.params().iter()) {
-        if let Some(arg_parsed) = Value::from_str(&arg.as_str(), *value_type) {
+        if let Some(arg_parsed) = Value::from_str(&arg.as_string(), *value_type) {
             args_parsed.push(arg_parsed);
         } else {
             bail!(
                 "Failed to parse argument \"{}\" as {}",
-                arg.as_str(),
+                arg.as_string(),
                 value_type
             );
         }
