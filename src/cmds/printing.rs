@@ -7,7 +7,8 @@ pub fn add_cmds(commands: &mut Commands) {
     commands.add(
         Command::new("x", cmd_x)
             .takes_args("/FMT ADDRESS:addr")
-            .description("Examine memory"),
+            .description("Examine memory")
+            .requires_running(),
     );
 }
 

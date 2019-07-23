@@ -9,16 +9,19 @@ pub fn add_cmds(commands: &mut Commands) {
     commands.add(
         Command::new("run", cmd_run)
             .alias("r")
-            .description("Run the currently loaded binary"),
+            .description("Run the currently loaded binary")
+            .requires_file(),
     );
     commands.add(
         Command::new("start", cmd_start)
-            .description("Start the currently loaded binary and pause on the first instruction"),
+            .description("Start the currently loaded binary and pause on the first instruction")
+            .requires_file(),
     );
     commands.add(
         Command::new("call", cmd_call)
             .takes_args("FUNC_INDEX:u32 [ARGS:str...]")
-            .description("Call a specific function in the current runtime context"),
+            .description("Call a specific function in the current runtime context")
+            .requires_file(),
     );
     commands.add(
             Command::new("break", cmd_break)
@@ -26,17 +29,20 @@ pub fn add_cmds(commands: &mut Commands) {
                 .takes_args("FUNC_INDEX:u32 [INSTRUCTION_INDEX:u32]")
                 .description("Set a breakpoint")
                 .help("Set a breakpoint at the specified function and instruction. If no instruction is specified the breakpoint is set to the function start. When execution reaches a breakpoint it will pause")
+            .requires_file()
         );
     commands.add(
         Command::new("delete", cmd_delete)
             .description("Delete a breakpoint")
             .takes_args("BREAKPOINT_INDEX:u32")
-            .help("Delete the breakpoint with the specified index."),
+            .help("Delete the breakpoint with the specified index.")
+            .requires_file(),
     );
     commands.add(
         Command::new("continue", cmd_continue)
             .alias("c")
-            .description("Continue execution after a breakpoint"),
+            .description("Continue execution after a breakpoint")
+            .requires_running(),
     );
     commands.add(
         Command::new("step", cmd_step)
@@ -46,6 +52,7 @@ pub fn add_cmds(commands: &mut Commands) {
             .takes_args("[N:u32]")
             .description("Step one instruction")
             .help("Step exactly one or if an argument is given exactly N instructions.\nUnlike \"next\" this will enter subroutine calls.")
+            .requires_running()
     );
     commands.add(
         Command::new("next", cmd_next)
@@ -55,10 +62,12 @@ pub fn add_cmds(commands: &mut Commands) {
             .takes_args("[N:u32]")
             .description("Step one instruction, but skip over subroutine calls")
             .help("Step one or if an argument is given N instructions.\nUnlike \"step\" this will skip over subroutine calls.")
+            .requires_running()
     );
     commands.add(
         Command::new("finish", cmd_finish)
-            .description("Execute until the current function returns"),
+            .description("Execute until the current function returns")
+            .requires_running(),
     );
 }
 

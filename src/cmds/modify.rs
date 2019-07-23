@@ -13,7 +13,7 @@ pub fn add_cmds(commands: &mut Commands) {
     commands.add(
         Command::new_subcommand("set")
             .description("Modify various values of the currently running program")
-            // .requires_running()
+            .requires_running()
             .add_subcommand(
                 Command::new("memory", cmd_set_memory)
                     .takes_args("ADDR:addr = VAL:str i8|i16|i32|i64|f32|f64")

@@ -239,6 +239,16 @@ impl Command {
         self.args = parse_types(args);
         self
     }
+
+    pub fn requires_file(mut self) -> Self {
+        self.requires_file = true;
+        self
+    }
+
+    pub fn requires_running(mut self) -> Self {
+        self.requires_running = true;
+        self.requires_file()
+    }
 }
 
 pub struct Commands {
