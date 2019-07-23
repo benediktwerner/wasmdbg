@@ -24,25 +24,21 @@ pub fn add_cmds(commands: &mut Commands) {
                 Command::new("imports", cmd_info_imports).description("Print import section"),
             )
             .add_subcommand(
-                Command::new("functions", cmd_info_functions).alias("funcs").description("Print function section"),
+                Command::new("functions", cmd_info_functions)
+                    .alias("funcs")
+                    .description("Print function section"),
             )
-            .add_subcommand(
-                Command::new("tables", cmd_info_tables).description("Print table section"),
-            )
+            .add_subcommand(Command::new("tables", cmd_info_tables).description("Print tables"))
             .add_subcommand(
                 Command::new("memory", cmd_info_memory).description("Print memory section"),
             )
-            .add_subcommand(
-                Command::new("global", cmd_info_globals).description("Print global section"),
-            )
-            .add_subcommand(
-                Command::new("export", cmd_info_exports).description("Print export section"),
-            )
+            .add_subcommand(Command::new("globals", cmd_info_globals).description("Print globals"))
+            .add_subcommand(Command::new("exports", cmd_info_exports).description("Print exports"))
             .add_subcommand(
                 Command::new("start", cmd_info_start).description("Print start section"),
             )
             .add_subcommand(
-                Command::new("element", cmd_info_elements).description("Print element section"),
+                Command::new("elements", cmd_info_elements).description("Print element section"),
             )
             .add_subcommand(Command::new("data", cmd_info_data).description("Print data section"))
             .add_subcommand(
@@ -106,7 +102,6 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     }
     println!("{} exports", module.exports().len());
 
-
     println!("{} linear memories", module.memories().len());
 
     for (i, entry) in module.memories().iter().enumerate() {
@@ -119,10 +114,13 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
                 max * PAGE_SIZE
             );
         } else {
-            println!(" -> Memory {:>2}: Min. 0x{:x} bytes", i, limits.initial() * PAGE_SIZE);
+            println!(
+                " -> Memory {:>2}: Min. 0x{:x} bytes",
+                i,
+                limits.initial() * PAGE_SIZE
+            );
         }
     }
-
 
     match module.start_func() {
         Some(start_func) => println!("Start function: #{}", start_func),
@@ -217,9 +215,8 @@ fn cmd_info_imports(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 fn cmd_info_functions(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     for func in dbg.get_file()?.module().functions() {
         if func.is_imported() {
-        println!("imported {}", func);
-        }
-        else {
+            println!("imported {}", func);
+        } else {
             println!("{}", func);
         }
     }
@@ -244,7 +241,11 @@ fn cmd_info_memory(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
                 max * PAGE_SIZE
             );
         } else {
-            println!("Memory {:>2}: Min. 0x{:x} bytes", i, limits.initial() * PAGE_SIZE);
+            println!(
+                "Memory {:>2}: Min. 0x{:x} bytes",
+                i,
+                limits.initial() * PAGE_SIZE
+            );
         }
     }
     Ok(())

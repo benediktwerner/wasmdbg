@@ -67,7 +67,7 @@ impl fmt::Display for FunctionType {
 pub struct Function {
     name: String,
     func_type: FunctionType,
-    imported: bool,
+    is_imported: bool,
     locals: Vec<ValueType>,
     instructions: Vec<Instruction>,
 }
@@ -82,7 +82,7 @@ impl Function {
         Function {
             name,
             func_type,
-            imported: false,
+            is_imported: false,
             locals,
             instructions,
         }
@@ -92,7 +92,7 @@ impl Function {
         Function {
             name,
             func_type,
-            imported: true,
+            is_imported: true,
             locals: Vec::with_capacity(0),
             instructions: Vec::with_capacity(0),
         }
@@ -105,7 +105,7 @@ impl Function {
         &self.func_type
     }
     pub fn is_imported(&self) -> bool {
-        self.imported
+        self.is_imported
     }
     pub fn locals(&self) -> &[ValueType] {
         &self.locals

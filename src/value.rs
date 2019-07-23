@@ -66,12 +66,7 @@ impl fmt::Display for Value {
                 }
             }
             Value::F32(val) => write!(f, "f32 : 0x{:08x} ~ {:.8}", val.to_bits(), val.to_float()),
-            Value::F64(val) => write!(
-                f,
-                "f64 : 0x{:016x} ~ {:.16}",
-                val.to_bits(),
-                val.to_float()
-            ),
+            Value::F64(val) => write!(f, "f64 : 0x{:016x} ~ {:.16}", val.to_bits(), val.to_float()),
         }
     }
 }
