@@ -534,7 +534,20 @@ impl VM {
         if let Some(start_function) = self.module.start_func() {
             self.run_func(start_function)
         } else {
-            Trap::NoStartFunction
+            let mut start_function = None;
+            for export in self.module.exports() {
+                if export.field() == "_start" {
+                    if let Internal::Function(index) = export.internal() {
+                        start_function = Some(*index);
+                        break;
+                    }
+                }
+            }
+            if let Some(index) = start_function {
+                self.run_func(index)
+            } else {
+                Trap::NoStartFunction
+            }
         }
     }
 
