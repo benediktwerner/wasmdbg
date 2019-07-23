@@ -279,9 +279,14 @@ fn cmd_info_exports(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_info_start(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    // TODO: Implement
-    println!("Not implemented");
+fn cmd_info_start(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    let module = dbg.get_file()?.module();
+    if let Some(start_func_index) = module.start_func() {
+        let start_func = module.get_func(start_func_index).unwrap();
+        println!("Function {}: {}", start_func_index, start_func);
+    } else {
+        println!("No start function declared");
+    }
     Ok(())
 }
 
