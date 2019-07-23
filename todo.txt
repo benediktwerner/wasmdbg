@@ -1,8 +1,6 @@
 show all sections (types, inits, etc.)
 try out a ctf binary
 format disassembly
-read debug symbols
-use debug symbols for function names
 watchpoints
 write to memory
 modify stack values

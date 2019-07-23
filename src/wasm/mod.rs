@@ -6,7 +6,7 @@ use failure::Fail;
 use parity_wasm::elements as pwasm;
 pub use parity_wasm::elements::{
     CustomSection, ExportEntry, External, GlobalType, ImportEntry, Instruction, MemoryType,
-    ResizableLimits, TableType, ValueType,
+    ResizableLimits, TableType, ValueType, Internal,
 };
 pub use parity_wasm::SerializationError;
 
@@ -268,10 +268,12 @@ impl Module {
     }
 
     fn from_parity_module(module: parity_wasm::elements::Module) -> Self {
-        let module = match module.parse_names() {
-            Ok(module) => module,
-            Err((_, module)) => module,
-        };
+        // TODO: Use name section
+        // Problem: What happens when multiple functions have the same name?
+        // let module = match module.parse_names() {
+        //     Ok(module) => module,
+        //     Err((_, module)) => module,
+        // };
 
         let mut types = Vec::new();
         if let Some(type_sec) = module.type_section() {
@@ -339,34 +341,47 @@ impl Module {
             }
         }
 
+        let imports = Vec::from(
+            module
+                .import_section()
+                .map(|sec| sec.entries())
+                .unwrap_or(&[]),
+        );
+        let exports = Vec::from(
+            module
+                .export_section()
+                .map(|sec| sec.entries())
+                .unwrap_or(&[]),
+        );
+        let tables = Vec::from(
+            module
+                .table_section()
+                .map(|sec| sec.entries())
+                .unwrap_or(&[]),
+        );
+        let memories = Vec::from(
+            module
+                .memory_section()
+                .map(|sec| sec.entries())
+                .unwrap_or(&[]),
+        );
+
+        for export in &exports {
+            match export.internal() {
+                Internal::Function(index) => functions[*index as usize].name = export.field().to_string(),
+                Internal::Global(index) => globals[*index as usize].name = export.field().to_string(),
+                _ => (),
+            }
+        }
+
         Module {
             types,
-            imports: Vec::from(
-                module
-                    .import_section()
-                    .map(|sec| sec.entries())
-                    .unwrap_or(&[]),
-            ),
-            exports: Vec::from(
-                module
-                    .export_section()
-                    .map(|sec| sec.entries())
-                    .unwrap_or(&[]),
-            ),
+            imports,
+            exports,
             functions,
             globals,
-            tables: Vec::from(
-                module
-                    .table_section()
-                    .map(|sec| sec.entries())
-                    .unwrap_or(&[]),
-            ),
-            memories: Vec::from(
-                module
-                    .memory_section()
-                    .map(|sec| sec.entries())
-                    .unwrap_or(&[]),
-            ),
+            tables,
+            memories,
             element_entries,
             data_entries,
             start_func: module.start_section(),

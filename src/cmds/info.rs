@@ -213,11 +213,13 @@ fn cmd_info_imports(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 }
 
 fn cmd_info_functions(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    for func in dbg.get_file()?.module().functions() {
+    let functions = dbg.get_file()?.module().functions();
+    let highest_index_len = functions.len().to_string().len();
+    for (i, func) in functions.iter().enumerate() {
         if func.is_imported() {
-            println!("imported {}", func);
+            println!(" {:>2$}: imported {}", i, func, highest_index_len);
         } else {
-            println!("{}", func);
+            println!(" {:>2$}: {}", i, func, highest_index_len);
         }
     }
     Ok(())
@@ -252,7 +254,7 @@ fn cmd_info_memory(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 }
 
 fn cmd_info_globals(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    for global in dbg.get_file()?.module().globals() {
+    for (i, global) in dbg.get_file()?.module().globals().iter().enumerate() {
         let const_str = if global.is_mutable() {
             "mut  "
         } else {
@@ -263,10 +265,10 @@ fn cmd_info_globals(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
             InitExpr::Global(index) => format!("global {}", index),
         };
         println!(
-            "{}: {} {} = {}",
-            global.name(),
+            " {}: {} {:15} = {}",
+            i,
             const_str,
-            global.value_type(),
+            global.name(),
             init_str
         );
     }
