@@ -251,31 +251,37 @@ fn cmd_info_memory(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 }
 
 fn cmd_info_globals(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    // TODO: Implement
     println!("Not implemented");
     Ok(())
 }
 
 fn cmd_info_exports(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    // TODO: Implement
     println!("Not implemented");
     Ok(())
 }
 
 fn cmd_info_start(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    // TODO: Implement
     println!("Not implemented");
     Ok(())
 }
 
 fn cmd_info_elements(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    // TODO: Implement
     println!("Not implemented");
     Ok(())
 }
 
 fn cmd_info_data(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    // TODO: Implement
     println!("Not implemented");
     Ok(())
 }
 
 fn cmd_info_custom(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    // TODO: Implement
     println!("Not implemented");
     Ok(())
 }
