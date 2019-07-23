@@ -113,13 +113,13 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
         let limits = entry.limits();
         if let Some(max) = limits.maximum() {
             println!(
-                " -> Memory #{}: Min. 0x{:x}, Max. 0x{:x}",
+                " -> Memory {:>2}: Min. 0x{:x} bytes, Max. 0x{:x} bytes",
                 i,
                 limits.initial() * PAGE_SIZE,
                 max * PAGE_SIZE
             );
         } else {
-            println!(" -> Memory #{}: Min. 0x{:x}", i, limits.initial() * PAGE_SIZE);
+            println!(" -> Memory {:>2}: Min. 0x{:x} bytes", i, limits.initial() * PAGE_SIZE);
         }
     }
 
@@ -233,8 +233,20 @@ fn cmd_info_tables(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_info_memory(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    println!("Not implemented");
+fn cmd_info_memory(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    for (i, entry) in dbg.get_file()?.module().memories().iter().enumerate() {
+        let limits = entry.limits();
+        if let Some(max) = limits.maximum() {
+            println!(
+                "Memory {:>2}: Min. 0x{:x} bytes, Max. 0x{:x} bytes",
+                i,
+                limits.initial() * PAGE_SIZE,
+                max * PAGE_SIZE
+            );
+        } else {
+            println!("Memory {:>2}: Min. 0x{:x} bytes", i, limits.initial() * PAGE_SIZE);
+        }
+    }
     Ok(())
 }
 
