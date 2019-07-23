@@ -10,6 +10,11 @@ use crate::wasm::{
 };
 use crate::Breakpoints;
 
+pub const VALUE_STACK_LIMIT: usize = 1024 * 1024;
+pub const LABEL_STACK_LIMIT: usize = 64 * 1024;
+pub const FUNCTION_STACK_LIMIT: usize = 1024;
+pub const MEMORY_MAX_PAGES: u32 = 65_536;
+
 #[derive(Debug, Fail)]
 pub enum InitError {
     #[fail(display = "Initalizer contains global.get which requires imports (unimplemented)")]
@@ -70,6 +75,12 @@ pub enum Trap {
     MemoryAccessOutOfRange(u32),
     #[fail(display = "Tried to call imported function: {} (unsupported)", _0)]
     UnsupportedCallToImportedFunction(u32),
+    #[fail(display = "Value stack overflow")]
+    ValueStackOverflow,
+    #[fail(display = "Label stack overflow")]
+    LabelStackOverflow,
+    #[fail(display = "Function stack overflow")]
+    FunctionStackOverflow,
 }
 
 pub type VMResult<T> = Result<T, Trap>;
@@ -149,12 +160,14 @@ impl Memory {
     }
 
     fn grow(&mut self, delta: u32) -> u32 {
-        // TODO: limit growth
         let page_count = self.page_count();
         if let Some(max) = self.limits.maximum() {
             if page_count + delta > max {
                 return -1i32 as u32;
             }
+        }
+        else if page_count + delta > MEMORY_MAX_PAGES {
+            return -1i32 as u32;
         }
         self.data
             .resize(((page_count + delta) * PAGE_SIZE) as usize, 0);
@@ -304,8 +317,12 @@ impl VM {
         &self.memory
     }
 
-    fn push(&mut self, val: Value) {
+    fn push(&mut self, val: Value) -> VMResult<()> {
+        if self.value_stack.len() >= VALUE_STACK_LIMIT {
+            return Err(Trap::ValueStackOverflow);
+        }
         self.value_stack.push(val);
+        Ok(())
     }
 
     fn pop(&mut self) -> VMResult<Value> {
@@ -395,7 +412,7 @@ impl VM {
 
     fn perform_load<T: Number + LittleEndianConvert>(&mut self, offset: u32) -> VMResult<()> {
         let address = self.pop_as::<u32>()? + offset;
-        self.push(self.memory.load::<T>(address)?.into());
+        self.push(self.memory.load::<T>(address)?.into())?;
         Ok(())
     }
 
@@ -409,7 +426,7 @@ impl VM {
         let address = self.pop_as::<u32>()? + offset;
         let val: T = self.memory.load(address)?;
         let val: U = val.extend_to();
-        self.push(val.into());
+        self.push(val.into())?;
         Ok(())
     }
 
@@ -433,20 +450,20 @@ impl VM {
 
     fn unop<T: Number, R: Number, F: Fn(T) -> R>(&mut self, fun: F) -> VMResult<()> {
         let val: T = self.pop_as()?;
-        self.push(fun(val).into());
+        self.push(fun(val).into())?;
         Ok(())
     }
 
     fn unop_try<T: Number, R: Number, F: Fn(T) -> VMResult<R>>(&mut self, fun: F) -> VMResult<()> {
         let val: T = self.pop_as()?;
-        self.push(fun(val)?.into());
+        self.push(fun(val)?.into())?;
         Ok(())
     }
 
     fn binop<T: Number, R: Number, F: Fn(T, T) -> R>(&mut self, fun: F) -> VMResult<()> {
         let b: T = self.pop_as()?;
         let a: T = self.pop_as()?;
-        self.push(fun(a, b).into());
+        self.push(fun(a, b).into())?;
         Ok(())
     }
 
@@ -456,7 +473,7 @@ impl VM {
     ) -> VMResult<()> {
         let b: T = self.pop_as()?;
         let a: T = self.pop_as()?;
-        self.push(fun(a, b)?.into());
+        self.push(fun(a, b)?.into())?;
         Ok(())
     }
 
@@ -478,7 +495,14 @@ impl VM {
             locals.push(Value::default(*local_type));
         }
 
+        if self.label_stack.len() >= LABEL_STACK_LIMIT {
+            return Err(Trap::LabelStackOverflow);
+        }
         self.label_stack.push(Label::Return);
+
+        if self.function_stack.len() >= FUNCTION_STACK_LIMIT {
+            return Err(Trap::FunctionStackOverflow);
+        }
         self.function_stack.push(FunctionFrame {
             ret_addr: self.ip,
             locals,
@@ -511,7 +535,9 @@ impl VM {
         self.trap = None;
         self.ip = CodePosition::default();
         for arg in args {
-            self.push(*arg);
+            if let Err(trap) = self.push(*arg) {
+                return trap;
+            }
         }
         if let Err(trap) = self.call(index) {
             return trap;
@@ -648,14 +674,14 @@ impl VM {
                 let val2 = self.pop()?;
                 let val1 = self.pop()?;
                 if cond != 0 {
-                    self.push(val1);
+                    self.push(val1)?;
                 } else {
-                    self.push(val2);
+                    self.push(val2)?;
                 }
             }
             Instruction::GetLocal(index) => {
                 let val = self.locals()?[index as usize];
-                self.push(val);
+                self.push(val)?;
             }
             Instruction::SetLocal(index) => {
                 let val = self.pop()?;
@@ -667,7 +693,7 @@ impl VM {
             }
             Instruction::GetGlobal(index) => {
                 let val = self.globals[index as usize];
-                self.push(val);
+                self.push(val)?;
             }
             Instruction::SetGlobal(index) => {
                 // TODO: Check if global is muteable
@@ -720,17 +746,17 @@ impl VM {
                 self.perform_store_wrap::<u32, u64>(offset)?
             }
 
-            Instruction::CurrentMemory(_) => self.push(Value::I32(self.memory.page_count())),
+            Instruction::CurrentMemory(_) => self.push(Value::I32(self.memory.page_count()))?,
             Instruction::GrowMemory(_) => {
                 let delta = self.pop_as::<u32>()?;
                 let result = self.memory.grow(delta);
-                self.push(Value::I32(result));
+                self.push(Value::I32(result))?;
             }
 
-            Instruction::I32Const(val) => self.push(Value::I32(val as u32)),
-            Instruction::I64Const(val) => self.push(Value::I64(val as u64)),
-            Instruction::F32Const(val) => self.push(Value::F32(F32::from_bits(val))),
-            Instruction::F64Const(val) => self.push(Value::F64(F64::from_bits(val))),
+            Instruction::I32Const(val) => self.push(Value::I32(val as u32))?,
+            Instruction::I64Const(val) => self.push(Value::I64(val as u64))?,
+            Instruction::F32Const(val) => self.push(Value::F32(F32::from_bits(val)))?,
+            Instruction::F64Const(val) => self.push(Value::F64(F64::from_bits(val)))?,
 
             Instruction::I32Eqz => self.unop(|x: u32| bool_val(x == 0))?,
             Instruction::I32Eq => self.binop(|a: u32, b: u32| bool_val(a == b))?,

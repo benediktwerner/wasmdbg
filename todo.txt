@@ -6,6 +6,7 @@ format disassembly
 watchpoints
 validate modules using wasm-validate from wabt
 Catch Ctrl+C
+settings
 
 Ideas:
 record execution
