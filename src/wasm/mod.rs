@@ -315,6 +315,8 @@ impl Module {
                     let name = format!("{}.{}", entry.module(), entry.field());
                     let func_type = types[*type_ref as usize].clone();
                     functions.push(Function::new_imported(name, func_type))
+                } else {
+                    println!("Unsupported import: {:?}", entry);
                 }
             }
         }
