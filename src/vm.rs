@@ -28,10 +28,10 @@ pub enum InitError {
         found: ValueType,
     },
     #[fail(
-        display = "Memory offset expr has invalid type. Expected \"I32\", found \"{}\"",
+        display = "Offset expr has invalid type. Expected \"i32\", found \"{}\"",
         _0
     )]
-    MemoryOffsetInvalidType(ValueType),
+    OffsetInvalidType(ValueType),
 }
 
 #[derive(Clone, Debug, Fail)]
@@ -142,7 +142,7 @@ impl Memory {
                     let offset = match offset.to::<u32>() {
                         Some(val) => val as usize,
                         None => {
-                            return Err(InitError::MemoryOffsetInvalidType(offset.value_type()))
+                            return Err(InitError::OffsetInvalidType(offset.value_type()))
                         }
                     };
                     let len = data_segment.value().len();
@@ -229,12 +229,26 @@ impl Table {
             .unwrap_or_default()
     }
 
-    fn from_module(module: &Module) -> Option<Table> {
+    fn from_module(module: &Module) -> Result<Option<Table>, InitError> {
         if let Some(default_table_type) = module.tables().get(0) {
-            // TODO: Init table!!
-            return Some(Table::new(*default_table_type));
+            let mut table = Table::new(*default_table_type);
+            for entry in module.element_entries() {
+                if entry.index() == 0 {
+                    let offset = eval_init_expr(entry.offset())?;
+                    let offset = match offset.to::<u32>() {
+                        Some(val) => val as usize,
+                        None => {
+                            return Err(InitError::OffsetInvalidType(offset.value_type()))
+                        }
+                    };
+                    for (i, val) in entry.members().iter().enumerate() {
+                        table.elements[offset + i] = TableElement::Func(*val);
+                    }
+                }
+            }
+            return Ok(Some(table));
         }
-        None
+        Ok(None)
     }
 }
 
@@ -273,7 +287,7 @@ impl VM {
             globals.push(val);
         }
         let memory = Memory::from_module(&module)?;
-        let table = Table::from_module(&module);
+        let table = Table::from_module(&module)?;
 
         Ok(VM {
             module,
