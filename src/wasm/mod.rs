@@ -115,6 +115,12 @@ impl Function {
     }
 }
 
+impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "fn {}{}", self.name, &self.func_type.to_string()[3..])
+    }
+}
+
 pub enum InitExpr {
     Const(Value),
     Global(u32),

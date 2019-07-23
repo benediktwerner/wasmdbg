@@ -24,7 +24,7 @@ pub fn add_cmds(commands: &mut Commands) {
                 Command::new("imports", cmd_info_imports).description("Print import section"),
             )
             .add_subcommand(
-                Command::new("functions", cmd_info_functions).description("Print function section"),
+                Command::new("functions", cmd_info_functions).alias("funcs").description("Print function section"),
             )
             .add_subcommand(
                 Command::new("tables", cmd_info_tables).description("Print table section"),
@@ -214,8 +214,15 @@ fn cmd_info_imports(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_info_functions(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    println!("Not implemented");
+fn cmd_info_functions(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    for func in dbg.get_file()?.module().functions() {
+        if func.is_imported() {
+        println!("imported {}", func);
+        }
+        else {
+            println!("{}", func);
+        }
+    }
     Ok(())
 }
 
