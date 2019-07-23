@@ -17,7 +17,7 @@ mod cmds;
 mod readline;
 mod utils;
 
-use cmds::{load_file, CommandHandler, Commands};
+use cmds::{CommandHandler, Commands};
 use readline::Readline;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -34,7 +34,11 @@ fn main() {
     let mut cmd_handler = CommandHandler::new(cmds);
 
     if let Some(file_path) = matches.value_of("file") {
-        load_file(&mut dbg, file_path);
+        if let Err(error) = dbg.load_file(file_path) {
+            println!("{}", error);
+        } else {
+            println!("Loaded \"{}\"", file_path);
+        }
     }
 
     cmd_handler.load_init_file(&mut dbg, ".wasmdbg_init");

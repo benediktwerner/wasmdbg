@@ -268,12 +268,6 @@ impl Commands {
                 .alias("quit")
                 .description("Exit wasmdbg"),
         );
-        cmds.add(
-            Command::new("load", cmd_load)
-                .takes_args("FILE:path")
-                .description("Load a wasm binary")
-                .help("Load the wasm binary FILE."),
-        );
 
         info::add_cmds(&mut cmds);
         utils::add_cmds(&mut cmds);
@@ -417,19 +411,6 @@ impl CommandHandler {
     }
 }
 
-pub fn load_file(dbg: &mut Debugger, file_path: &str) {
-    if let Err(error) = dbg.load_file(file_path) {
-        println!("{}", error);
-    } else {
-        println!("Loaded \"{}\"", file_path);
-    }
-}
-
 fn cmd_unreachable(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     unreachable!();
-}
-
-fn cmd_load(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
-    load_file(dbg, &args[0].as_str());
-    Ok(())
 }
