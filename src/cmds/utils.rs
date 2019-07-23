@@ -14,7 +14,7 @@ pub fn add_cmds(commands: &mut Commands) {
     commands.add(
         Command::new("python", cmd_python)
             .alias("pi")
-            .takes_args("EXPR:line")
+            .takes_args("[EXPR:line]")
             .description("Run python interpreter"),
     );
 }
