@@ -141,9 +141,7 @@ impl Memory {
                     let offset = eval_init_expr(data_segment.offset())?;
                     let offset = match offset.to::<u32>() {
                         Some(val) => val as usize,
-                        None => {
-                            return Err(InitError::OffsetInvalidType(offset.value_type()))
-                        }
+                        None => return Err(InitError::OffsetInvalidType(offset.value_type())),
                     };
                     let len = data_segment.value().len();
                     data[offset..offset + len].copy_from_slice(data_segment.value());
@@ -165,8 +163,7 @@ impl Memory {
             if page_count + delta > max {
                 return -1i32 as u32;
             }
-        }
-        else if page_count + delta > MEMORY_MAX_PAGES {
+        } else if page_count + delta > MEMORY_MAX_PAGES {
             return -1i32 as u32;
         }
         self.data
@@ -237,9 +234,7 @@ impl Table {
                     let offset = eval_init_expr(entry.offset())?;
                     let offset = match offset.to::<u32>() {
                         Some(val) => val as usize,
-                        None => {
-                            return Err(InitError::OffsetInvalidType(offset.value_type()))
-                        }
+                        None => return Err(InitError::OffsetInvalidType(offset.value_type())),
                     };
                     for (i, val) in entry.members().iter().enumerate() {
                         table.elements[offset + i] = TableElement::Func(*val);

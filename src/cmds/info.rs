@@ -224,7 +224,12 @@ fn cmd_info_functions(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 
 fn cmd_info_tables(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     for (i, table) in dbg.get_file()?.module().tables().iter().enumerate() {
-        println!("Table {:>2}: {:?}, Length: {}", i, table.elem_type(), table.limits().initial());
+        println!(
+            "Table {:>2}: {:?}, Length: {}",
+            i,
+            table.elem_type(),
+            table.limits().initial()
+        );
     }
     Ok(())
 }
@@ -261,13 +266,7 @@ fn cmd_info_globals(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
             InitExpr::Const(val) => format!("{}", val),
             InitExpr::Global(index) => format!("global {}", index),
         };
-        println!(
-            " {}: {} {:15} = {}",
-            i,
-            const_str,
-            global.name(),
-            init_str
-        );
+        println!(" {}: {} {:15} = {}", i, const_str, global.name(), init_str);
     }
     Ok(())
 }

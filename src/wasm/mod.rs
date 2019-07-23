@@ -5,8 +5,8 @@ use std::path::Path;
 use failure::Fail;
 use parity_wasm::elements as pwasm;
 pub use parity_wasm::elements::{
-    CustomSection, ExportEntry, External, GlobalType, ImportEntry, Instruction, MemoryType,
-    ResizableLimits, TableType, ValueType, Internal,
+    CustomSection, ExportEntry, External, GlobalType, ImportEntry, Instruction, Internal,
+    MemoryType, ResizableLimits, TableType, ValueType,
 };
 pub use parity_wasm::SerializationError;
 
@@ -368,8 +368,12 @@ impl Module {
 
         for export in &exports {
             match export.internal() {
-                Internal::Function(index) => functions[*index as usize].name = export.field().to_string(),
-                Internal::Global(index) => globals[*index as usize].name = export.field().to_string(),
+                Internal::Function(index) => {
+                    functions[*index as usize].name = export.field().to_string()
+                }
+                Internal::Global(index) => {
+                    globals[*index as usize].name = export.field().to_string()
+                }
                 _ => (),
             }
         }
