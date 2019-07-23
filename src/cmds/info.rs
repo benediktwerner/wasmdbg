@@ -1,5 +1,5 @@
 use wasmdbg::vm::{CodePosition, Trap};
-use wasmdbg::wasm::{External, InitExpr};
+use wasmdbg::wasm::{External, InitExpr, PAGE_SIZE};
 use wasmdbg::Debugger;
 
 use super::{CmdArg, CmdResult, Command, Commands};
@@ -64,6 +64,9 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 
     println!("File: {}", file.file_path());
     println!("{} types", module.types().len());
+    println!("{} functions", module.functions().len());
+    println!("{} globals", module.globals().len());
+    println!("{} tables", module.tables().len());
 
     {
         let mut func_count = 0;
@@ -101,9 +104,8 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
             );
         }
     }
+    println!("{} exports", module.exports().len());
 
-    println!("{} functions", module.functions().len());
-    println!("{} tables", module.tables().len());
 
     println!("{} linear memories", module.memories().len());
 
@@ -113,16 +115,14 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
             println!(
                 " -> Memory #{}: Min. 0x{:x}, Max. 0x{:x}",
                 i,
-                limits.initial(),
-                max
+                limits.initial() * PAGE_SIZE,
+                max * PAGE_SIZE
             );
         } else {
-            println!(" -> Memory #{}: Min. 0x{:x}", i, limits.initial());
+            println!(" -> Memory #{}: Min. 0x{:x}", i, limits.initial() * PAGE_SIZE);
         }
     }
 
-    println!("{} globals", module.globals().len());
-    println!("{} exports", module.exports().len());
 
     match module.start_func() {
         Some(start_func) => println!("Start function: #{}", start_func),
@@ -200,11 +200,10 @@ fn cmd_info_imports(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
                 let func_type = &module.types()[*type_index as usize];
                 // TODO: group functions from the same module
                 println!(
-                    "Function {}\t{:<20}\twith type {:>3}: {}",
+                    "fn {}.{}{}",
                     entry.module(),
                     entry.field(),
-                    type_index,
-                    func_type
+                    &func_type.to_string()[3..]
                 );
             }
             External::Table(table_type) => println!("Table: {:?}", table_type),

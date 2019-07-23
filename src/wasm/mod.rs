@@ -12,6 +12,8 @@ pub use parity_wasm::SerializationError;
 
 use crate::value::Value;
 
+pub const PAGE_SIZE: u32 = 64 * 1024; // 64 KiB
+
 #[derive(Debug, Fail)]
 pub enum LoadError {
     #[fail(display = "File not found")]

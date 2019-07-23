@@ -5,7 +5,7 @@ use std::rc::Rc;
 
 use crate::nan_preserving_float::{F32, F64};
 use crate::value::{ExtendTo, Integer, LittleEndianConvert, Number, Value, WrapTo};
-use crate::wasm::{Function, InitExpr, Instruction, Module, ResizableLimits, TableType, ValueType};
+use crate::wasm::{Function, InitExpr, Instruction, Module, ResizableLimits, TableType, ValueType, PAGE_SIZE};
 use crate::Breakpoints;
 
 #[derive(Debug, Fail)]
@@ -105,8 +105,6 @@ pub struct FunctionFrame {
     pub locals: Vec<Value>,
 }
 
-const PAGE_SIZE: usize = 64 * 1024; // 64 KiB
-
 pub struct Memory {
     data: Vec<u8>,
     limits: ResizableLimits,
@@ -123,7 +121,7 @@ impl Memory {
     fn from_module(module: &Module) -> Result<Self, InitError> {
         if let Some(memory) = module.memories().get(0) {
             let limits = *memory.limits();
-            let mut data = vec![0; (limits.initial() as usize) * PAGE_SIZE];
+            let mut data = vec![0; (limits.initial() * PAGE_SIZE) as usize];
 
             for data_segment in module.data_entries() {
                 if data_segment.index() == 0 {
@@ -145,7 +143,7 @@ impl Memory {
     }
 
     pub fn page_count(&self) -> u32 {
-        (self.data.len() / PAGE_SIZE) as u32
+        (self.data.len() as u32 / PAGE_SIZE)
     }
 
     fn grow(&mut self, delta: u32) -> u32 {
@@ -157,7 +155,7 @@ impl Memory {
             }
         }
         self.data
-            .resize((page_count + delta) as usize * PAGE_SIZE, 0);
+            .resize(((page_count + delta) * PAGE_SIZE) as usize, 0);
         page_count
     }
 
