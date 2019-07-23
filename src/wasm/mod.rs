@@ -384,7 +384,7 @@ impl Module {
                     if let Internal::Function(index) = export.internal() {
                         let index = *index;
                         let func_type = functions[index as usize].func_type();
-                        if func_type.params().len() == 0 && func_type.return_type().is_none() {
+                        if func_type.params().is_empty() && func_type.return_type().is_none() {
                             return Some(index);
                         }
                     }
