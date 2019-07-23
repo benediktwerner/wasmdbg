@@ -7,6 +7,8 @@ use super::{CmdArg, CmdResult, Command, Commands};
 pub fn add_cmds(commands: &mut Commands) {
     commands.add(
         Command::new_subcommand("info")
+            .alias("i")
+            .description("Print info about the programm being debugged")
             .add_subcommand(
                 Command::new("file", cmd_info_file)
                     .description("Print info about the currently loaded binary"),
@@ -45,9 +47,7 @@ pub fn add_cmds(commands: &mut Commands) {
                 Command::new("custom", cmd_info_custom)
                     .takes_args("[INDEX:u32|NAME:str]")
                     .description("Print custom sections"),
-            )
-            .alias("i")
-            .description("Print info about the programm being debugged"),
+            ),
     );
     commands.add(
         Command::new("status", cmd_status).description("Print status of the current wasm instance"),
