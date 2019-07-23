@@ -4,7 +4,10 @@ format disassembly
 read debug symbols
 use debug symbols for function names
 watchpoints
+write to memory
+modify stack values
 wasi
+validate modules using wasm-validate from wabt
 
 Ideas:
 record execution
