@@ -1,6 +1,5 @@
 #[macro_use]
 extern crate failure;
-extern crate parity_wasm;
 
 use std::cell::{Ref, RefCell};
 use std::collections::{HashMap, HashSet};

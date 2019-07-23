@@ -1,6 +1,3 @@
-extern crate terminal_size;
-extern crate wasmdbg;
-
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::sync::Arc;

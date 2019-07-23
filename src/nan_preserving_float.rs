@@ -287,9 +287,7 @@ impl From<F64> for u64 {
 
 #[cfg(test)]
 mod tests {
-    extern crate rand;
-
-    use self::rand::Rng;
+    use rand::Rng;
 
     use super::{F32, F64};
 

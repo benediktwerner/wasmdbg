@@ -3,11 +3,6 @@ extern crate lazy_static;
 #[macro_use]
 extern crate failure;
 
-extern crate clap;
-extern crate colored;
-extern crate parity_wasm;
-extern crate wasmdbg;
-
 use std::sync::Arc;
 
 use clap::{App, Arg};

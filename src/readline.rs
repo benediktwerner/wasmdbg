@@ -1,6 +1,3 @@
-extern crate linefeed;
-extern crate shellexpand;
-
 use std::io;
 use std::sync::Arc;
 
