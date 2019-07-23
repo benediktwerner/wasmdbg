@@ -3,6 +3,8 @@ use std::fmt;
 
 use failure::{err_msg, Error};
 
+use wasmdbg::value::Integer;
+
 use super::format::Format;
 use super::{CmdArg, CmdArgType};
 
@@ -19,8 +21,9 @@ pub fn parse_types(line: &'static str) -> Vec<CmdArgType> {
             c if c.is_whitespace() && bracket_level == 0 => {
                 let curr_index = last_index + size;
                 result.push(line[last_index..curr_index].into());
-                last_index = curr_index + 1;
+                last_index = curr_index + c.len_utf8();
                 size = 0;
+                continue;
             }
             _ => (),
         }
@@ -127,7 +130,9 @@ impl ParseCmdArg for CmdArgType {
             }
             CmdArgType::Usize(_) => wrap(next_arg(line), |a| Ok(CmdArg::Usize(a.parse()?))),
             CmdArgType::U32(_) => wrap(next_arg(line), |a| Ok(CmdArg::U32(a.parse()?))),
-            CmdArgType::Addr(_) => wrap(next_arg(line), |a| Ok(CmdArg::U32(parse_address(a)?))),
+            CmdArgType::Addr(_) => wrap(next_arg(line), |a| {
+                Ok(CmdArg::U32(u32::from_str_with_radix(a)?))
+            }),
             CmdArgType::Const(val) => {
                 if line.trim_start().starts_with(*val) {
                     Ok((&line[val.len()..], vec![CmdArg::Const(val)]))
@@ -247,14 +252,6 @@ fn next_arg(line: &str) -> Result<(&str, &str), Error> {
 //     let arg_len = line.len() - rest.len() - 1;
 //     Ok((rest, &line[..arg_len]))
 // }
-
-fn parse_address(addr: &str) -> Result<u32, std::num::ParseIntError> {
-    if addr.len() > 2 && addr[0..2].to_lowercase() == "0x" {
-        u32::from_str_radix(&addr[2..], 16)
-    } else {
-        u32::from_str_radix(addr, 10)
-    }
-}
 
 fn parse_format(fmt_str: &str) -> Result<(u32, u32, Format), Error> {
     let count_str = fmt_str

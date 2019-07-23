@@ -13,6 +13,7 @@ mod context;
 mod execution;
 mod format;
 mod info;
+mod modify;
 mod parse;
 mod printing;
 mod utils;
@@ -271,6 +272,7 @@ impl Commands {
 
         info::add_cmds(&mut cmds);
         utils::add_cmds(&mut cmds);
+        modify::add_cmds(&mut cmds);
         context::add_cmds(&mut cmds);
         printing::add_cmds(&mut cmds);
         execution::add_cmds(&mut cmds);

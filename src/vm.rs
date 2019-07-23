@@ -185,7 +185,7 @@ impl Memory {
         Ok(T::from_little_endian(bytes))
     }
 
-    fn store<T: LittleEndianConvert>(&mut self, address: u32, value: T) -> VMResult<()> {
+    pub fn store<T: LittleEndianConvert>(&mut self, address: u32, value: T) -> VMResult<()> {
         let size = core::mem::size_of::<T>();
         let address = address as usize;
         let bytes = self
@@ -324,6 +324,10 @@ impl VM {
 
     pub fn memory(&self) -> &Memory {
         &self.memory
+    }
+
+    pub fn memory_mut(&mut self) -> &mut Memory {
+        &mut self.memory
     }
 
     fn push(&mut self, val: Value) -> VMResult<()> {

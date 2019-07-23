@@ -256,7 +256,7 @@ impl Debugger {
         }
     }
 
-    fn get_vm_mut(&mut self) -> DebuggerResult<&mut VM> {
+    pub fn get_vm_mut(&mut self) -> DebuggerResult<&mut VM> {
         if let Some(ref mut vm) = self.vm {
             Ok(vm)
         } else {

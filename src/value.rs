@@ -141,43 +141,44 @@ impl_number!(f64, F64);
 impl_number!(F32, F32);
 impl_number!(F64, F64);
 
-pub trait Integer<T> {
-    fn leading_zeros(self) -> T;
-    fn trailing_zeros(self) -> T;
-    fn count_ones(self) -> T;
-    fn rotl(self, other: T) -> T;
-    fn rotr(self, other: T) -> T;
-    fn rem(self, other: T) -> VMResult<T>;
-    fn div(self, other: T) -> VMResult<T>;
+pub trait Integer: Sized {
+    fn leading_zeros(self) -> Self;
+    fn trailing_zeros(self) -> Self;
+    fn count_ones(self) -> Self;
+    fn rotl(self, other: Self) -> Self;
+    fn rotr(self, other: Self) -> Self;
+    fn rem(self, other: Self) -> VMResult<Self>;
+    fn div(self, other: Self) -> VMResult<Self>;
+    fn from_str_with_radix(s: &str) -> Result<Self, std::num::ParseIntError>;
 }
 
 macro_rules! impl_integer {
     ($type:ident) => {
         #[allow(clippy::cast_lossless)]
-        impl Integer<$type> for $type {
-            fn leading_zeros(self) -> $type {
+        impl Integer for $type {
+            fn leading_zeros(self) -> Self {
                 self.leading_zeros() as $type
             }
-            fn trailing_zeros(self) -> $type {
+            fn trailing_zeros(self) -> Self {
                 self.trailing_zeros() as $type
             }
-            fn count_ones(self) -> $type {
+            fn count_ones(self) -> Self {
                 self.count_ones() as $type
             }
-            fn rotl(self, other: $type) -> $type {
+            fn rotl(self, other: Self) -> Self {
                 self.rotate_left(other as u32)
             }
-            fn rotr(self, other: $type) -> $type {
+            fn rotr(self, other: Self) -> Self {
                 self.rotate_right(other as u32)
             }
-            fn rem(self, other: $type) -> VMResult<$type> {
+            fn rem(self, other: Self) -> VMResult<Self> {
                 if other == 0 {
                     Err(Trap::DivisionByZero)
                 } else {
                     Ok(self.wrapping_rem(other))
                 }
             }
-            fn div(self, other: $type) -> VMResult<$type> {
+            fn div(self, other: Self) -> VMResult<Self> {
                 if other == 0 {
                     return Err(Trap::DivisionByZero);
                 }
@@ -188,14 +189,33 @@ macro_rules! impl_integer {
                     Ok(result)
                 }
             }
+            fn from_str_with_radix(s: &str) -> Result<Self, std::num::ParseIntError> {
+                let radix = if s.len() > 2 {
+                    match s[0..2].to_lowercase().as_str() {
+                        "0x" => Some(16),
+                        "0o" => Some(8),
+                        "0b" => Some(2),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+                if let Some(radix) = radix {
+                    $type::from_str_radix(&s[2..], radix)
+                } else {
+                    $type::from_str_radix(s, 10)
+                }
+            }
         }
     };
 }
 
+impl_integer!(i16);
 impl_integer!(i32);
 impl_integer!(u32);
 impl_integer!(i64);
 impl_integer!(u64);
+impl_integer!(i128);
 
 pub trait LittleEndianConvert: Sized {
     fn from_little_endian(buffer: &[u8]) -> Self;
