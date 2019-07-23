@@ -224,7 +224,7 @@ fn cmd_info_functions(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 
 fn cmd_info_tables(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     for (i, table) in dbg.get_file()?.module().tables().iter().enumerate() {
-        println!("Table {:>2}: {:?}", i, table.elem_type());
+        println!("Table {:>2}: {:?}, Length: {}", i, table.elem_type(), table.limits().initial());
     }
     Ok(())
 }
