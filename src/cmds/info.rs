@@ -226,8 +226,10 @@ fn cmd_info_functions(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_info_tables(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    println!("Not implemented");
+fn cmd_info_tables(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    for (i, table) in dbg.get_file()?.module().tables().iter().enumerate() {
+        println!("Table {:>2}: {:?}", i, table.elem_type());
+    }
     Ok(())
 }
 
