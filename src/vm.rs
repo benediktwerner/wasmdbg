@@ -710,7 +710,6 @@ impl VM {
                 self.push(val)?;
             }
             Instruction::SetGlobal(index) => {
-                // TODO: Check if global is muteable
                 let val = self.pop()?;
                 self.globals[index as usize] = val;
             }
