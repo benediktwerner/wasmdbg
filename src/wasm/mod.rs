@@ -1,6 +1,7 @@
 use std::fmt;
 use std::iter::{self, FromIterator};
 use std::path::Path;
+use std::process;
 
 use failure::Fail;
 use parity_wasm::elements as pwasm;
@@ -20,6 +21,8 @@ pub enum LoadError {
     FileNotFound,
     #[fail(display = "Error while loading file: {}", _0)]
     SerializationError(#[fail(cause)] SerializationError),
+    #[fail(display = "Error while validating file: {}", _0)]
+    ValidationError(String)
 }
 
 #[derive(Clone)]
@@ -260,6 +263,25 @@ impl Module {
         if !Path::new(file_path).exists() {
             return Err(LoadError::FileNotFound);
         }
+
+        // TODO: Do proper validation of the LOADED module
+        match process::Command::new("wasm-validate").arg(file_path).output() {
+            Ok(output) => {
+                if !output.status.success() {
+                    return Err(LoadError::ValidationError(String::from_utf8(output.stderr).expect("Error while reading \"wasm-validate\" output")));
+                }
+            },
+            Err(error) => {
+                if let std::io::ErrorKind::NotFound = error.kind() {
+                    println!("Could not validate the module because \"wasm-validate\" was not found.");
+                    println!("Install \"wabt\" to enable module validation.")
+                }
+                else {
+                    return Err(LoadError::ValidationError(error.to_string()));
+                }
+            }
+        };
+
 
         match parity_wasm::deserialize_file(file_path) {
             Ok(module) => Ok(Module::from_parity_module(module)),
