@@ -12,6 +12,10 @@ pub fn add_cmds(commands: &mut Commands) {
             .description("Run the currently loaded binary"),
     );
     commands.add(
+        Command::new("start", cmd_start)
+            .description("Start the currently loaded binary and pause on the first instruction"),
+    );
+    commands.add(
         Command::new("call", cmd_call)
             .takes_args("FUNC_INDEX:u32 [ARGS:str...]")
             .description("Call a specific function in the current runtime context"),
@@ -60,6 +64,14 @@ pub fn add_cmds(commands: &mut Commands) {
 
 fn cmd_run(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     print_run_result(dbg.run()?, dbg)
+}
+
+fn cmd_start(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    if let Some(trap) = dbg.start()? {
+        print_run_result(trap, dbg)
+    } else {
+        context::print_context(dbg)
+    }
 }
 
 fn cmd_call(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {

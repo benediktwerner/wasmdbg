@@ -6,8 +6,7 @@ use std::rc::Rc;
 use crate::nan_preserving_float::{F32, F64};
 use crate::value::{ExtendTo, Integer, LittleEndianConvert, Number, Value, WrapTo};
 use crate::wasm::{
-    Function, InitExpr, Instruction, Internal, Module, ResizableLimits, TableType, ValueType,
-    PAGE_SIZE,
+    Function, InitExpr, Instruction, Module, ResizableLimits, TableType, ValueType, PAGE_SIZE,
 };
 use crate::Breakpoints;
 
@@ -530,43 +529,36 @@ impl VM {
         Ok(())
     }
 
-    pub fn run(&mut self) -> Trap {
+    pub fn start(&mut self) -> VMResult<()> {
         if let Some(start_function) = self.module.start_func() {
-            self.run_func(start_function)
+            self.run_func_paused(start_function, &[])
         } else {
-            let mut start_function = None;
-            for export in self.module.exports() {
-                if export.field() == "_start" {
-                    if let Internal::Function(index) = export.internal() {
-                        start_function = Some(*index);
-                        break;
-                    }
-                }
-            }
-            if let Some(index) = start_function {
-                self.run_func(index)
-            } else {
-                Trap::NoStartFunction
-            }
+            Err(Trap::NoStartFunction)
         }
     }
 
-    pub fn run_func(&mut self, index: u32) -> Trap {
-        self.run_func_args(index, &[])
-    }
-
-    pub fn run_func_args(&mut self, index: u32, args: &[Value]) -> Trap {
+    fn run_func_paused(&mut self, index: u32, args: &[Value]) -> VMResult<()> {
         self.function_stack.clear();
         self.label_stack.clear();
         self.value_stack.clear();
         self.trap = None;
         self.ip = CodePosition::default();
         for arg in args {
-            if let Err(trap) = self.push(*arg) {
-                return trap;
-            }
+            self.push(*arg)?
         }
-        if let Err(trap) = self.call(index) {
+        self.call(index)
+    }
+
+    pub fn run(&mut self) -> Trap {
+        if let Some(start_function) = self.module.start_func() {
+            self.run_func(start_function, &[])
+        } else {
+            Trap::NoStartFunction
+        }
+    }
+
+    pub fn run_func(&mut self, index: u32, args: &[Value]) -> Trap {
+        if let Err(trap) = self.run_func_paused(index, args) {
             return trap;
         }
         if let Some(index) = self.breakpoints.borrow().find(self.ip) {

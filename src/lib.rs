@@ -207,8 +207,12 @@ impl Debugger {
         Ok(self.create_vm()?.run())
     }
 
+    pub fn start(&mut self) -> DebuggerResult<Option<Trap>> {
+        Ok(self.create_vm()?.start().err())
+    }
+
     pub fn call(&mut self, index: u32, args: &[Value]) -> DebuggerResult<Trap> {
-        Ok(self.ensure_vm()?.run_func_args(index, args))
+        Ok(self.ensure_vm()?.run_func(index, args))
     }
 
     pub fn reset_vm(&mut self) -> DebuggerResult<()> {
