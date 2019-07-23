@@ -100,8 +100,8 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
             );
         }
     }
-    println!("{} exports", module.exports().len());
 
+    println!("{} exports", module.exports().len());
     println!("{} linear memories", module.memories().len());
 
     for (i, entry) in module.memories().iter().enumerate() {
@@ -122,12 +122,9 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
         }
     }
 
-    match module.start_func() {
-        Some(start_func) => println!("Start function: #{}", start_func),
-        None => println!("No start section"),
-    }
-
+    println!("{} table initializers", module.element_entries().len());
     println!("{} data initializers", module.data_entries().len());
+
     for entry in module.data_entries() {
         let offset = match entry.offset() {
             InitExpr::Const(val) => format!("{}", val.to::<u32>().unwrap()),
