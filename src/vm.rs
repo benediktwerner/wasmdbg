@@ -169,7 +169,7 @@ impl Memory {
         page_count
     }
 
-    pub fn data(&self) -> &Vec<u8> {
+    pub fn data(&self) -> &[u8] {
         &self.data
     }
 
@@ -296,15 +296,19 @@ impl VM {
         })
     }
 
-    pub fn value_stack(&self) -> &Vec<Value> {
+    pub fn value_stack(&self) -> &[Value] {
         &self.value_stack
     }
 
-    pub fn function_stack(&self) -> &Vec<FunctionFrame> {
+    pub fn value_stack_mut(&mut self) -> &mut Vec<Value> {
+        &mut self.value_stack
+    }
+
+    pub fn function_stack(&self) -> &[FunctionFrame] {
         &self.function_stack
     }
 
-    pub fn label_stack(&self) -> &Vec<Label> {
+    pub fn label_stack(&self) -> &[Label] {
         &self.label_stack
     }
 
@@ -316,7 +320,7 @@ impl VM {
         self.ip
     }
 
-    pub fn globals(&self) -> &Vec<Value> {
+    pub fn globals(&self) -> &[Value] {
         &self.globals
     }
 

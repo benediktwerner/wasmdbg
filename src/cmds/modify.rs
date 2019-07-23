@@ -4,8 +4,10 @@ use failure::Error;
 
 use wasmdbg::value::Integer;
 use wasmdbg::Debugger;
+use wasmdbg::wasm::ValueType;
 
 use super::{CmdArg, CmdResult, Command, Commands};
+use super::context;
 
 pub fn add_cmds(commands: &mut Commands) {
     commands.add(
@@ -18,6 +20,14 @@ pub fn add_cmds(commands: &mut Commands) {
                     .description("Modify the linear memory")
                     .help(
                         "Write the the value VAL to the address ADDR in the default linear memory.",
+                    ),
+            )
+            .add_subcommand(
+                Command::new("stack", cmd_set_stack)
+                    .takes_args("INDEX:usize = VAL:str")
+                    .description("Modify a value on the stack")
+                    .help(
+                        "Replace the value at index INDEX on the stack. The type of the value will be unchanged to preserve wasm validation guarantees.",
                     ),
             ),
     );
@@ -66,4 +76,21 @@ fn cmd_set_memory(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
     }
 
     Ok(())
+}
+
+fn cmd_set_stack(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
+    let index = args[0].as_usize();
+    let val = args[2].as_string();
+    let stack = dbg.get_vm_mut()?.value_stack_mut();
+
+    ensure!(index < stack.len(), "Index out of range");
+
+    match stack[index].value_type() {
+        ValueType::I32 => stack[index] = (i64::from_str_with_radix(&val)? as u32).into(),
+        ValueType::I64 => stack[index] = (i128::from_str_with_radix(&val)? as u64).into(),
+        ValueType::F32 => stack[index] = val.parse::<f32>()?.into(),
+        ValueType::F64 => stack[index] = val.parse::<f64>()?.into(),
+    }
+
+    context::print_context(dbg)
 }

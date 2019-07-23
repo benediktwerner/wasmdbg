@@ -1,6 +1,7 @@
 wasi
 write to memory
 modify stack values
+restore requires_running etc.
 
 format disassembly
 watchpoints
