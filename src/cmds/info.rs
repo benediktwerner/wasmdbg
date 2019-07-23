@@ -251,9 +251,25 @@ fn cmd_info_memory(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_info_globals(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    // TODO: Implement
-    println!("Not implemented");
+fn cmd_info_globals(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    for global in dbg.get_file()?.module().globals() {
+        let const_str = if global.is_mutable() {
+            "mut  "
+        } else {
+            "const"
+        };
+        let init_str = match global.init_expr() {
+            InitExpr::Const(val) => format!("{}", val),
+            InitExpr::Global(index) => format!("global {}", index),
+        };
+        println!(
+            "{}: {} {} = {}",
+            global.name(),
+            const_str,
+            global.value_type(),
+            init_str
+        );
+    }
     Ok(())
 }
 

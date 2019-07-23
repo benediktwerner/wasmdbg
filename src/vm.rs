@@ -251,9 +251,9 @@ impl VM {
         let mut globals = Vec::with_capacity(module.globals().len());
         for global in module.globals() {
             let val = eval_init_expr(global.init_expr())?;
-            if val.value_type() != global.global_type().content_type() {
+            if val.value_type() != global.value_type() {
                 return Err(InitError::MismatchedType {
-                    expected: global.global_type().content_type(),
+                    expected: global.value_type(),
                     found: val.value_type(),
                 });
             }

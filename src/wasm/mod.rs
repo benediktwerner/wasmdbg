@@ -150,30 +150,38 @@ impl From<&pwasm::InitExpr> for InitExpr {
 }
 
 pub struct Global {
-    imported: bool,
-    global_type: GlobalType,
+    name: String,
+    is_imported: bool,
+    is_mutable: bool,
+    value_type: ValueType,
     init_expr: InitExpr,
 }
 
 impl Global {
-    pub fn imported(&self) -> bool {
-        self.imported
+    fn from_parity(name: String, global: &pwasm::GlobalEntry) -> Self {
+        let global_type = global.global_type();
+        Global {
+            name,
+            is_imported: false,
+            is_mutable: global_type.is_mutable(),
+            value_type: global_type.content_type(),
+            init_expr: global.init_expr().into(),
+        }
     }
-    pub fn global_type(&self) -> &GlobalType {
-        &self.global_type
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn is_imported(&self) -> bool {
+        self.is_imported
+    }
+    pub fn is_mutable(&self) -> bool {
+        self.is_mutable
+    }
+    pub fn value_type(&self) -> ValueType {
+        self.value_type
     }
     pub fn init_expr(&self) -> &InitExpr {
         &self.init_expr
-    }
-}
-
-impl From<&pwasm::GlobalEntry> for Global {
-    fn from(global: &pwasm::GlobalEntry) -> Self {
-        Global {
-            imported: false,
-            global_type: *global.global_type(),
-            init_expr: global.init_expr().into(),
-        }
     }
 }
 
@@ -275,8 +283,9 @@ impl Module {
 
         let mut globals = Vec::new();
         if let Some(global_sec) = module.global_section() {
-            for global in global_sec.entries() {
-                globals.push(global.into());
+            for (i, global) in global_sec.entries().iter().enumerate() {
+                let name = format!("g{}", i);
+                globals.push(Global::from_parity(name, global));
             }
         }
 
