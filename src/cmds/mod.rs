@@ -316,13 +316,10 @@ impl CommandHandler {
     }
 
     pub fn handle_line(&mut self, dbg: &mut Debugger, line: &str) -> bool {
-        let mut line_iter = line
-            .trim()
-            .splitn(2, |c: char| c.is_whitespace() || c == '/');
-        let cmd_name = line_iter.next().unwrap();
+        let (cmd_name, args) = split_cmd_name_and_args(line);
 
         match cmd_name {
-            "help" => self.print_help(line_iter.next().unwrap_or("")),
+            "help" => self.print_help(args),
             "quit" | "exit" => {
                 return true;
             }
@@ -333,7 +330,7 @@ impl CommandHandler {
                 return false;
             }
             _ => match self.commands.find_by_name(cmd_name) {
-                Some(cmd) => cmd.handle(dbg, line_iter.next().unwrap_or("")),
+                Some(cmd) => cmd.handle(dbg, args),
                 None => println!("Unknown command: \"{}\". Try \"help\".", cmd_name),
             },
         }
@@ -410,6 +407,19 @@ impl CommandHandler {
             }
             None => println!("Unknown command: \"{}\". Try \"help\".", cmd_name),
         }
+    }
+}
+
+fn split_cmd_name_and_args(line: &str) -> (&str, &str) {
+    let split_index = line.find(|c: char| c.is_whitespace() || c == '/');
+    if let Some(split_index) = split_index {
+        if let Some('/') = line[split_index..].chars().next() {
+            line.split_at(split_index)
+        } else {
+            (&line[..split_index], &line[split_index + 1..])
+        }
+    } else {
+        (line, "")
     }
 }
 

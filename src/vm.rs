@@ -6,7 +6,8 @@ use std::rc::Rc;
 use crate::nan_preserving_float::{F32, F64};
 use crate::value::{ExtendTo, Integer, LittleEndianConvert, Number, Value, WrapTo};
 use crate::wasm::{
-    Function, InitExpr, Instruction, Module, ResizableLimits, TableType, ValueType, PAGE_SIZE,
+    Function, InitExpr, Instruction, Internal, Module, ResizableLimits, TableType, ValueType,
+    PAGE_SIZE,
 };
 use crate::Breakpoints;
 
