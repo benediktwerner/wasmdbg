@@ -1,11 +1,11 @@
-show all sections (types, inits, etc.)
-try out a ctf binary
-format disassembly
-watchpoints
+wasi
 write to memory
 modify stack values
-wasi
+
+format disassembly
+watchpoints
 validate modules using wasm-validate from wabt
+Catch Ctrl+C
 
 Ideas:
 record execution
