@@ -1,7 +1,7 @@
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 
-use failure::{err_msg, Error};
+use failure::Error;
 
 use wasmdbg::value::Integer;
 
@@ -105,8 +105,8 @@ pub trait ParseCmdArg {
     fn parse_all(&self, line: &str) -> Result<Vec<CmdArg>, Error> {
         match self.parse(line) {
             Ok(("", arg)) => Ok(arg),
-            Ok(_) => Err(err_msg("Too many arguments.")),
-            Err(error) => Err(format_err!("Invalid arguments: \"{}\". {}", line, error)),
+            Ok(_) => bail!("Too many arguments."),
+            Err(error) => Err(error),
         }
     }
 }
@@ -137,7 +137,7 @@ impl ParseCmdArg for CmdArgType {
                 if line.trim_start().starts_with(*val) {
                     Ok((&line[val.len()..], vec![CmdArg::Const(val)]))
                 } else {
-                    Err(format_err!("Expected \"{}\"", val))
+                    bail!("Expected \"{}\"", val);
                 }
             }
             CmdArgType::Union(elements) => {
@@ -146,7 +146,7 @@ impl ParseCmdArg for CmdArgType {
                         return Ok(arg);
                     }
                 }
-                Err(format_err!("Expected {}", self))
+                bail!("Expected {}", self);
             }
             CmdArgType::List(arg_type) => {
                 let mut line = line;
@@ -154,9 +154,7 @@ impl ParseCmdArg for CmdArgType {
                 while !line.trim().is_empty() {
                     let (rest, args) = match arg_type.parse(line) {
                         Ok(result) => result,
-                        Err(error) => {
-                            return Err(format_err!("Invalid arguments: \"{}\". {}", line, error))
-                        }
+                        Err(error) => bail!("Invalid arguments: \"{}\". {}", line, error),
                     };
                     result.extend(args);
                     line = rest;
@@ -178,9 +176,18 @@ impl ParseCmdArg for Vec<CmdArgType> {
     fn parse<'a>(&self, mut line: &'a str) -> Result<(&'a str, Vec<CmdArg>), Error> {
         let mut result = Vec::new();
         for arg_type in self {
-            let (rest, args) = arg_type.parse(line)?;
-            result.extend(args);
-            line = rest;
+            match arg_type.parse(line) {
+                Ok((rest, args)) => {
+                    result.extend(args);
+                    line = rest;
+                }
+                Err(error) => {
+                    if line.is_empty() {
+                        bail!("Missing argument(s)");
+                    }
+                    bail!("Invalid argument: \"{}\". {}", line, error);
+                }
+            }
         }
         Ok((line, result))
     }
@@ -203,7 +210,7 @@ fn next_arg(line: &str) -> Result<(&str, &str), Error> {
             return Ok(("", arg));
         }
     }
-    Err(err_msg("Missig argument(s)"))
+    bail!("Missig argument(s)")
 }
 
 // fn next_arg_escaped(line: &str) -> Result<(&str, &str), Error> {

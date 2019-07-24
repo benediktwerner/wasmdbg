@@ -1,6 +1,4 @@
 more wasi
-arg parsing:
-- print proper arg for errors
 print cmd
 
 info elements
