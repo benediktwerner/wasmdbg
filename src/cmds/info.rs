@@ -20,8 +20,9 @@ pub fn add_cmds(commands: &mut Commands) {
                     .description("Print breakpoints"),
             )
             .add_subcommand(
-                Command::new("ip", cmd_info_ip).description("Print instruction pointer")
-            .requires_running(),
+                Command::new("ip", cmd_info_ip)
+                    .description("Print instruction pointer")
+                    .requires_running(),
             )
             .add_subcommand(Command::new("types", cmd_info_types).description("Print type section"))
             .add_subcommand(
@@ -52,8 +53,8 @@ pub fn add_cmds(commands: &mut Commands) {
             ),
     );
     commands.add(
-        Command::new("status", cmd_status).description("Print status of the current wasm instance")
-            
+        Command::new("status", cmd_status)
+            .description("Print status of the current wasm instance")
             .requires_running(),
     );
 }

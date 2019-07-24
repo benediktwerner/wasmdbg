@@ -80,7 +80,7 @@ pub enum Trap {
     #[fail(display = "Function stack overflow")]
     FunctionStackOverflow,
     #[fail(display = "WASI process exited with exitcode {}", _0)]
-    WasiExit(u32)
+    WasiExit(u32),
 }
 
 pub type VMResult<T> = Result<T, Trap>;

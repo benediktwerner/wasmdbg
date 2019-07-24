@@ -1,4 +1,4 @@
-use crate::vm::{VM, VMResult, Trap};
+use crate::vm::{Trap, VMResult, VM};
 
 #[derive(Clone, Copy)]
 pub enum WasiFunction {

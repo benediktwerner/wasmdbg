@@ -39,9 +39,11 @@ pub fn add_cmds(commands: &mut Commands) {
             .description("Print a function backtrace")
             .requires_running(),
     );
-    commands
-        .add(Command::new("context", cmd_context).description("Show current execution context")
-            .requires_running());
+    commands.add(
+        Command::new("context", cmd_context)
+            .description("Show current execution context")
+            .requires_running(),
+    );
 
     commands.add(
         Command::new("globals", cmd_globals)

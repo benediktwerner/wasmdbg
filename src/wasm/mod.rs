@@ -11,8 +11,8 @@ pub use parity_wasm::elements::{
 };
 pub use parity_wasm::SerializationError;
 
-use crate::wasi::WasiFunction;
 use crate::value::Value;
+use crate::wasi::WasiFunction;
 
 pub const PAGE_SIZE: u32 = 64 * 1024; // 64 KiB
 
@@ -23,7 +23,7 @@ pub enum LoadError {
     #[fail(display = "Error while loading file: {}", _0)]
     SerializationError(#[fail(cause)] SerializationError),
     #[fail(display = "Error while validating file: {}", _0)]
-    ValidationError(String)
+    ValidationError(String),
 }
 
 #[derive(Clone)]
@@ -278,23 +278,29 @@ impl Module {
         }
 
         // TODO: Do proper validation of the LOADED module
-        match process::Command::new("wasm-validate").arg(file_path).output() {
+        match process::Command::new("wasm-validate")
+            .arg(file_path)
+            .output()
+        {
             Ok(output) => {
                 if !output.status.success() {
-                    return Err(LoadError::ValidationError(String::from_utf8(output.stderr).expect("Error while reading \"wasm-validate\" output")));
+                    return Err(LoadError::ValidationError(
+                        String::from_utf8(output.stderr)
+                            .expect("Error while reading \"wasm-validate\" output"),
+                    ));
                 }
-            },
+            }
             Err(error) => {
                 if let std::io::ErrorKind::NotFound = error.kind() {
-                    println!("Could not validate the module because \"wasm-validate\" was not found.");
+                    println!(
+                        "Could not validate the module because \"wasm-validate\" was not found."
+                    );
                     println!("Install \"wabt\" to enable module validation.")
-                }
-                else {
+                } else {
                     return Err(LoadError::ValidationError(error.to_string()));
                 }
             }
         };
-
 
         match parity_wasm::deserialize_file(file_path) {
             Ok(module) => Ok(Module::from_parity_module(module)),

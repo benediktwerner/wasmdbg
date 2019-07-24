@@ -3,11 +3,11 @@ use std::convert::TryFrom;
 use failure::Error;
 
 use wasmdbg::value::Integer;
-use wasmdbg::Debugger;
 use wasmdbg::wasm::ValueType;
+use wasmdbg::Debugger;
 
-use super::{CmdArg, CmdResult, Command, Commands};
 use super::context;
+use super::{CmdArg, CmdResult, Command, Commands};
 
 pub fn add_cmds(commands: &mut Commands) {
     commands.add(
