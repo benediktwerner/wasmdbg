@@ -1,8 +1,11 @@
 more wasi
 print
-format disassembly
+color disassembly
 
-watchpoints
+info elements
+info data
+info custom
+watchpoints?
 Catch Ctrl+C
 settings
 

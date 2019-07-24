@@ -4,9 +4,9 @@
 
 ## Building and Installation
 
-Building `wasmdbg` requires a [Rust Installation](https://www.rust-lang.org/).
+Building and installing `wasmdbg` requires a [Rust Installation](https://www.rust-lang.org/).
 
-To build and install `wasmdbg`:
+To install `wasmdbg`:
 
 ```
 $ git clone https://github.com/benediktwerner/wasmdbg
@@ -14,21 +14,30 @@ $ cargo install --path wasmdbg
 $ wasmdbg --version
 ```
 
+To build `wasmdbg`:
+```
+$ git clone https://github.com/benediktwerner/wasmdbg
+$ cd wasmdbg
+$ cargo build
+$ ./target/debug/wasmdbg --version
+```
+
+
 ## Features
 - Run MVP version 1 binaries
 - Limited subset of WASI (currently only `wasi_unstable.proc_exit`)
-- Call a specific functions with any arguments
-- Read function and global names from export section
+- Breakpoints: `break`
+- Single-stepping: `step`
+- Step-over function: `next`
+- Step-out of function: `finish`
+- View disassembly: `disas`
+- View program state: `context`, `locals`, `globals`, value `stack`, `backtrace` and `labels` stack
+- Modify program state: `set memory` and `set stack`)
+- Print info about the binary: `info file/imports/exports/functions/tables/memory/globals/start`
+- Call a specific functions with any arguments: `call`
+- Automatically read function and global names from export section
 - Specify startup commands in a `.wasmdbg_init` file
-- Breakpoints
-- Single-stepping
-- Step-over function, Step-out of function
-- View disassembly
-- View program state (locals, globals, memory, value stack, call stack, label stack)
-- Modify program state (memory and value stack)
-- Print info about the binary
-- Print wasm sections
-- Run a python interpreter
+- Run a python interpreter: `python`
 
 To view all available commands use the `help` command.
 To learn more about a specific command use `help COMMAND`.
