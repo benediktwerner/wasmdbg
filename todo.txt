@@ -2,9 +2,7 @@ more wasi
 arg parsing:
 - fix subcommand parsing (display subcommands if none given)
 - print proper arg for errors
-cmds:
-- reset
-- print
+print cmd
 
 info elements
 info data

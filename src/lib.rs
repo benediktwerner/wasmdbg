@@ -165,7 +165,7 @@ impl Debugger {
     }
 
     pub fn reset_vm(&mut self) -> DebuggerResult<()> {
-        self.create_vm()?;
+        self.vm = None;
         Ok(())
     }
 

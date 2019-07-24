@@ -24,6 +24,7 @@ pub fn add_cmds(commands: &mut Commands) {
             .description("Call a specific function in the current runtime context")
             .requires_file(),
     );
+    commands.add(Command::new("reset", cmd_reset).description("Reset the current wasm instance"));
     commands.add(
             Command::new("break", cmd_break)
                 .alias("b")
@@ -123,6 +124,11 @@ fn cmd_call(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
     }
 
     print_run_result(dbg.call(func_index, &args_parsed)?, dbg)
+}
+
+fn cmd_reset(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    dbg.reset_vm()?;
+    Ok(())
 }
 
 fn cmd_break(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
