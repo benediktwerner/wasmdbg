@@ -1,6 +1,7 @@
-wasi
-
+more wasi
+print
 format disassembly
+
 watchpoints
 Catch Ctrl+C
 settings

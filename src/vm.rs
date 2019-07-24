@@ -79,6 +79,8 @@ pub enum Trap {
     LabelStackOverflow,
     #[fail(display = "Function stack overflow")]
     FunctionStackOverflow,
+    #[fail(display = "WASI process exited with exitcode {}", _0)]
+    WasiExit(u32)
 }
 
 pub type VMResult<T> = Result<T, Trap>;
@@ -344,7 +346,7 @@ impl VM {
         self.value_stack.pop().ok_or(Trap::PopFromEmptyStack)
     }
 
-    fn pop_as<T: Number>(&mut self) -> VMResult<T> {
+    pub(crate) fn pop_as<T: Number>(&mut self) -> VMResult<T> {
         let val = self.pop()?;
         val.to::<T>().ok_or_else(|| Trap::TypeError {
             expected: val.value_type(),
@@ -617,6 +619,9 @@ impl VM {
     fn execute_step_internal(&mut self) -> VMResult<()> {
         let func = self.module.get_func(self.ip.func_index).unwrap();
         if func.is_imported() {
+            if let Some(wasi_func) = func.wasi_function() {
+                return wasi_func.handle(self);
+            }
             return Err(Trap::UnsupportedCallToImportedFunction(self.ip.func_index));
         }
 

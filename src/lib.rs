@@ -9,6 +9,7 @@ pub mod nan_preserving_float;
 pub mod value;
 pub mod vm;
 pub mod wasm;
+pub mod wasi;
 use value::Value;
 use vm::{CodePosition, InitError, Memory, Trap, VM};
 use wasm::{LoadError, Module};

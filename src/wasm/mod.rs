@@ -11,6 +11,7 @@ pub use parity_wasm::elements::{
 };
 pub use parity_wasm::SerializationError;
 
+use crate::wasi::WasiFunction;
 use crate::value::Value;
 
 pub const PAGE_SIZE: u32 = 64 * 1024; // 64 KiB
@@ -71,6 +72,7 @@ pub struct Function {
     name: String,
     func_type: FunctionType,
     is_imported: bool,
+    wasi_function: Option<WasiFunction>,
     locals: Vec<ValueType>,
     instructions: Vec<Instruction>,
 }
@@ -86,16 +88,24 @@ impl Function {
             name,
             func_type,
             is_imported: false,
+            wasi_function: None,
             locals,
             instructions,
         }
     }
 
     fn new_imported(name: String, func_type: FunctionType) -> Self {
+        let wasi_function = if name.starts_with("wasi_unstable.") {
+            // TODO: Check type
+            WasiFunction::from_name(&name["wasi_unstable.".len()..])
+        } else {
+            None
+        };
         Function {
             name,
             func_type,
             is_imported: true,
+            wasi_function,
             locals: Vec::with_capacity(0),
             instructions: Vec::with_capacity(0),
         }
@@ -109,6 +119,9 @@ impl Function {
     }
     pub fn is_imported(&self) -> bool {
         self.is_imported
+    }
+    pub fn wasi_function(&self) -> Option<WasiFunction> {
+        self.wasi_function
     }
     pub fn locals(&self) -> &[ValueType] {
         &self.locals
