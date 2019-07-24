@@ -1,3 +1,4 @@
+use wasmdbg::breakpoints::{Breakpoint, BreakpointTrigger};
 use wasmdbg::value::Value;
 use wasmdbg::vm::{CodePosition, Trap};
 use wasmdbg::Debugger;
@@ -28,8 +29,14 @@ pub fn add_cmds(commands: &mut Commands) {
                 .alias("b")
                 .takes_args("FUNC_INDEX:u32 [INSTRUCTION_INDEX:u32]")
                 .description("Set a breakpoint")
-                .help("Set a breakpoint at the specified function and instruction. If no instruction is specified the breakpoint is set to the function start. When execution reaches a breakpoint it will pause")
+                .help("Set a breakpoint at the specified function and instruction. If no instruction is specified the breakpoint is set to the function start. When execution reaches a breakpoint it will pause.")
             .requires_file()
+        );
+    commands.add(
+            Command::new_subcommand("watch")
+            .requires_file()
+            .add_subcommand(Command::new("memory", cmd_watch_memory).takes_args("ADDR:addr [read|write]").description("Watch a memory location").help("Watch the memory at address ADDR and pause execution when it's value is read/written."))
+            .add_subcommand(Command::new("global", cmd_watch_global).takes_args("INDEX:u32 [read|write]").description("Watch a global").help("Watch the global with index INDEX and pause execution when it's value is read/written."))
         );
     commands.add(
         Command::new("delete", cmd_delete)
@@ -121,12 +128,42 @@ fn cmd_call(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
 fn cmd_break(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
     let func_index = args[0].as_u32();
     let instr_index = args.get(1).as_u32_or(0);
-    let breakpoint = CodePosition {
+    let pos = CodePosition {
         func_index,
         instr_index,
     };
-    let index = dbg.add_breakpoint(breakpoint)?;
-    println!("Set breakpoint {} at {}", index, breakpoint);
+    let index = dbg.add_breakpoint(Breakpoint::Code(pos))?;
+    println!("Set breakpoint {} at {}", index, pos);
+    Ok(())
+}
+
+fn cmd_watch_memory(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
+    let addr = args[0].as_u32();
+    let trigger = match args.get(1) {
+        Some(trigger) => match trigger.as_const() {
+            "read" => BreakpointTrigger::Read,
+            "write" => BreakpointTrigger::Write,
+            trigger => bail!("Invalid watchpoint trigger: {}", trigger),
+        },
+        None => BreakpointTrigger::ReadWrite,
+    };
+    let index = dbg.add_breakpoint(Breakpoint::Memory(trigger, addr))?;
+    println!("Set watchpoint {} at address 0x{:>08x}", index, addr);
+    Ok(())
+}
+
+fn cmd_watch_global(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
+    let index = args[0].as_u32();
+    let trigger = match args.get(1) {
+        Some(trigger) => match trigger.as_const() {
+            "read" => BreakpointTrigger::Read,
+            "write" => BreakpointTrigger::Write,
+            trigger => bail!("Invalid watchpoint trigger: {}", trigger),
+        },
+        None => BreakpointTrigger::ReadWrite,
+    };
+    let index = dbg.add_breakpoint(Breakpoint::Global(trigger, index))?;
+    println!("Set watchpoint {} at global {}", index, index);
     Ok(())
 }
 
@@ -182,8 +219,12 @@ fn print_run_result(trap: Trap, dbg: &mut Debugger) -> CmdResult {
             }
         }
         Trap::BreakpointReached(index) => {
-            println!("Reached breakpoint {}", index);
             context::print_context(dbg)?;
+            println!("Reached breakpoint {}", index);
+        }
+        Trap::WatchpointReached(index) => {
+            context::print_context(dbg)?;
+            println!("Reached watchpoint {}", index);
         }
         _ => println!("Trap: {}", trap),
     }

@@ -50,6 +50,16 @@ impl CmdArg {
         }
     }
 
+    fn as_const(&self) -> &'static str {
+        match self {
+            CmdArg::Const(val) => val,
+            _ => panic!(
+                "Parsed arg has wrong type. Expected const, found {}",
+                self.type_str()
+            ),
+        }
+    }
+
     fn as_u32(&self) -> u32 {
         match self {
             CmdArg::U32(val) => *val,

@@ -67,6 +67,8 @@ pub enum Trap {
     NoStartFunction,
     #[fail(display = "Reached breakpoint {}", _0)]
     BreakpointReached(u32),
+    #[fail(display = "Reached watchpoint {}", _0)]
+    WatchpointReached(u32),
     #[fail(display = "Invalid branch index")]
     InvalidBranchIndex,
     #[fail(display = "Out of range memory access at address {:#08x}", _0)]
@@ -430,6 +432,10 @@ impl VM {
     fn perform_load<T: Number + LittleEndianConvert>(&mut self, offset: u32) -> VMResult<()> {
         let address = self.pop_as::<u32>()? + offset;
         self.push(self.memory.load::<T>(address)?.into())?;
+        let size = core::mem::size_of::<T>() as u32;
+        if let Some(break_index) = self.breakpoints.borrow().find_memory(address, size, false) {
+            return Err(Trap::WatchpointReached(break_index));
+        }
         Ok(())
     }
 
@@ -444,6 +450,10 @@ impl VM {
         let val: T = self.memory.load(address)?;
         let val: U = val.extend_to();
         self.push(val.into())?;
+        let size = core::mem::size_of::<T>() as u32;
+        if let Some(break_index) = self.breakpoints.borrow().find_memory(address, size, false) {
+            return Err(Trap::WatchpointReached(break_index));
+        }
         Ok(())
     }
 
@@ -451,6 +461,10 @@ impl VM {
         let value = self.pop_as::<T>()?;
         let address = self.pop_as::<u32>()? + offset;
         self.memory.store(address, value)?;
+        let size = core::mem::size_of::<T>() as u32;
+        if let Some(break_index) = self.breakpoints.borrow().find_memory(address, size, true) {
+            return Err(Trap::WatchpointReached(break_index));
+        }
         Ok(())
     }
 
@@ -462,6 +476,10 @@ impl VM {
         let value: T = value.wrap_to();
         let address = self.pop_as::<u32>()? + offset;
         self.memory.store(address, value)?;
+        let size = core::mem::size_of::<T>() as u32;
+        if let Some(break_index) = self.breakpoints.borrow().find_memory(address, size, true) {
+            return Err(Trap::WatchpointReached(break_index));
+        }
         Ok(())
     }
 
@@ -565,7 +583,7 @@ impl VM {
         if let Err(trap) = self.run_func_paused(index, args) {
             return trap;
         }
-        if let Some(index) = self.breakpoints.borrow().find(self.ip) {
+        if let Some(index) = self.breakpoints.borrow().find_code(self.ip) {
             return Trap::BreakpointReached(index);
         }
         self.continue_execution()
@@ -605,11 +623,13 @@ impl VM {
         }
 
         if let Err(trap) = self.execute_step_internal() {
-            if let Trap::BreakpointReached(_) = trap {
-                return Err(trap);
+            match trap {
+                Trap::BreakpointReached(_) | Trap::WatchpointReached(_) => return Err(trap),
+                _ => {
+                    self.trap = Some(trap.clone());
+                    return Err(trap);
+                }
             }
-            self.trap = Some(trap.clone());
-            return Err(trap);
         }
 
         Ok(())
@@ -720,10 +740,16 @@ impl VM {
             Instruction::GetGlobal(index) => {
                 let val = self.globals[index as usize];
                 self.push(val)?;
+                if let Some(break_index) = self.breakpoints.borrow().find_global(index, false) {
+                    return Err(Trap::WatchpointReached(break_index));
+                }
             }
             Instruction::SetGlobal(index) => {
                 let val = self.pop()?;
                 self.globals[index as usize] = val;
+                if let Some(break_index) = self.breakpoints.borrow().find_global(index, true) {
+                    return Err(Trap::WatchpointReached(break_index));
+                }
             }
 
             // All store/load instructions operate with 'memory immediates'
@@ -945,7 +971,7 @@ impl VM {
             return Err(Trap::ExecutionFinished);
         }
 
-        if let Some(index) = self.breakpoints.borrow().find(self.ip) {
+        if let Some(index) = self.breakpoints.borrow().find_code(self.ip) {
             return Err(Trap::BreakpointReached(index));
         }
 

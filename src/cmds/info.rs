@@ -1,4 +1,5 @@
-use wasmdbg::vm::{CodePosition, Trap};
+use wasmdbg::breakpoints::Breakpoint;
+use wasmdbg::vm::Trap;
 use wasmdbg::wasm::{External, InitExpr, PAGE_SIZE};
 use wasmdbg::Debugger;
 
@@ -161,15 +162,22 @@ fn cmd_info_break(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     let breakpoints = dbg.breakpoints()?;
     ensure!(breakpoints.len() > 0, "No breakpoints");
 
-    let mut breakpoints: Vec<(&u32, &CodePosition)> = breakpoints.iter().collect();
+    let mut breakpoints: Vec<(&u32, &Breakpoint)> = breakpoints.iter().collect();
     breakpoints.sort_unstable_by(|(index1, _), (index2, _)| index1.cmp(index2));
 
-    println!("{:<8}{:<12}Instruction", "Num", "Function");
-    for (index, breakpoint) in breakpoints {
-        println!(
-            "{:<8}{:<12}{}",
-            index, breakpoint.func_index, breakpoint.instr_index
-        );
+    println!("Num\tType\t\tWhere");
+    for (i, breakpoint) in breakpoints {
+        match breakpoint {
+            Breakpoint::Code(pos) => {
+                println!("{}\tbreakpoint\t{}\t{}", i, pos.func_index, pos.instr_index)
+            }
+            Breakpoint::Memory(trigger, addr) => {
+                println!("{}\twatchpoint\tMemory\t0x{:>08x}\t{}", i, addr, trigger)
+            }
+            Breakpoint::Global(trigger, index) => {
+                println!("{}\twatchpoint\tGlobal\t{}\t{}", i, index, trigger)
+            }
+        }
     }
 
     Ok(())

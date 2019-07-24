@@ -2,14 +2,15 @@
 extern crate failure;
 
 use std::cell::{Ref, RefCell};
-use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
+pub mod breakpoints;
 pub mod nan_preserving_float;
 pub mod value;
 pub mod vm;
 pub mod wasi;
 pub mod wasm;
+use breakpoints::{Breakpoint, Breakpoints};
 use value::Value;
 use vm::{CodePosition, InitError, Memory, Trap, VM};
 use wasm::{LoadError, Module};
@@ -24,76 +25,13 @@ pub enum DebuggerError {
     NoRunningInstance,
     #[fail(display = "Invalid brekapoint position")]
     InvalidBreakpointPosition,
+    #[fail(display = "Invalid global for watchpoint")]
+    InvalidWatchpointGlobal,
     #[fail(display = "This feature is still unimplemented")]
     Unimplemented,
 }
 
 pub type DebuggerResult<T> = Result<T, DebuggerError>;
-
-pub struct Breakpoints {
-    breakpoints: HashSet<CodePosition>,
-    breakpoint_indices: HashMap<u32, CodePosition>,
-    next_breakpoint_index: u32,
-}
-
-impl Breakpoints {
-    fn new() -> Self {
-        Breakpoints {
-            breakpoints: HashSet::new(),
-            breakpoint_indices: HashMap::new(),
-            next_breakpoint_index: 0,
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.breakpoint_indices.is_empty()
-    }
-
-    pub fn len(&self) -> usize {
-        self.breakpoint_indices.len()
-    }
-
-    pub fn find(&self, pos: CodePosition) -> Option<u32> {
-        if self.breakpoints.contains(&pos) {
-            for (index, breakpoint) in self.breakpoint_indices.iter() {
-                if *breakpoint == pos {
-                    return Some(*index);
-                }
-            }
-        }
-        None
-    }
-
-    fn add_breakpoint(&mut self, breakpoint: CodePosition) -> u32 {
-        self.breakpoints.insert(breakpoint);
-        self.breakpoint_indices
-            .insert(self.next_breakpoint_index, breakpoint);
-        self.next_breakpoint_index += 1;
-        self.next_breakpoint_index - 1
-    }
-
-    fn delete_breakpoint(&mut self, index: u32) -> bool {
-        if let Some(breakpoint) = self.breakpoint_indices.get(&index) {
-            self.breakpoints.remove(breakpoint);
-            self.breakpoint_indices.remove(&index);
-            return true;
-        }
-        false
-    }
-
-    pub fn iter(&self) -> <&Self as std::iter::IntoIterator>::IntoIter {
-        self.into_iter()
-    }
-}
-
-impl<'a> std::iter::IntoIterator for &'a Breakpoints {
-    type Item = (&'a u32, &'a CodePosition);
-    type IntoIter = <&'a HashMap<u32, CodePosition> as std::iter::IntoIterator>::IntoIter;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.breakpoint_indices.iter()
-    }
-}
 
 pub struct File {
     file_path: String,
@@ -179,18 +117,25 @@ impl Debugger {
         Ok(self.get_file()?.breakpoints())
     }
 
-    pub fn add_breakpoint(&mut self, breakpoint: CodePosition) -> DebuggerResult<u32> {
+    pub fn add_breakpoint(&mut self, breakpoint: Breakpoint) -> DebuggerResult<u32> {
         let file = self.get_file_mut()?;
-        if let Some(func) = file.module().get_func(breakpoint.func_index) {
-            if func
-                .instructions()
-                .get(breakpoint.instr_index as usize)
-                .is_none()
-            {
-                return Err(DebuggerError::InvalidBreakpointPosition);
+        match breakpoint {
+            Breakpoint::Code(pos) => {
+                if file
+                    .module()
+                    .get_func(pos.func_index)
+                    .and_then(|func| func.instructions().get(pos.instr_index as usize))
+                    .is_none()
+                {
+                    return Err(DebuggerError::InvalidBreakpointPosition);
+                }
             }
-        } else {
-            return Err(DebuggerError::InvalidBreakpointPosition);
+            Breakpoint::Memory(..) => (),
+            Breakpoint::Global(_, index) => {
+                if index as usize >= file.module().globals().len() {
+                    return Err(DebuggerError::InvalidWatchpointGlobal);
+                }
+            }
         }
         Ok(file.breakpoints.borrow_mut().add_breakpoint(breakpoint))
     }

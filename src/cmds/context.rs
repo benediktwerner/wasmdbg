@@ -188,7 +188,7 @@ fn print_disassembly(dbg: &Debugger, start: CodePosition, instrs: &[Instruction]
         let addr_str = format!("{}:{:>02$}", start.func_index, instr_index, max_index_len);
         let breakpoint = match breakpoints {
             Some(ref breakpoints) => {
-                breakpoints.find(CodePosition::new(start.func_index, instr_index))
+                breakpoints.find_code(CodePosition::new(start.func_index, instr_index))
             }
             None => None,
         };

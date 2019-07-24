@@ -27,6 +27,7 @@ $ ./target/debug/wasmdbg --version
 - Run MVP version 1 binaries
 - Limited subset of WASI (currently only `wasi_unstable.proc_exit`)
 - Breakpoints: `break`
+- Watchpoints: `watch memory/global`
 - Single-stepping: `step`
 - Step-over function: `next`
 - Step-out of function: `finish`
