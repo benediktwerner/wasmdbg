@@ -1,6 +1,5 @@
 more wasi
 arg parsing:
-- fix subcommand parsing (display subcommands if none given)
 - print proper arg for errors
 print cmd
 

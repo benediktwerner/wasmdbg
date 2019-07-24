@@ -197,16 +197,8 @@ impl Command {
             }
         } else {
             let mut args_iter = args.trim_start().splitn(2, char::is_whitespace);
-            if let Some(name) = args_iter.next() {
-                let cmds: &[Command] = &self.subcommands;
-                for cmd in cmds {
-                    if cmd.has_name(name) {
-                        cmd.handle(dbg, args_iter.next().unwrap_or(""));
-                        return;
-                    }
-                }
-                println!("Invalid subcommand: \"{}\"", name);
-            } else {
+            let subcmd = args_iter.next().unwrap_or("");
+            if subcmd.is_empty() {
                 println!("This command must be followed by a subcommand:\n");
                 for cmd in self.subcommands.iter() {
                     match cmd.description {
@@ -214,6 +206,15 @@ impl Command {
                         None => println!("{}", cmd.names()),
                     }
                 }
+            } else {
+                let cmds: &[Command] = &self.subcommands;
+                for cmd in cmds {
+                    if cmd.has_name(subcmd) {
+                        cmd.handle(dbg, args_iter.next().unwrap_or(""));
+                        return;
+                    }
+                }
+                println!("Invalid subcommand: \"{}\"", subcmd);
             }
         }
     }
