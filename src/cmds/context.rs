@@ -1,5 +1,4 @@
 use colored::*;
-use parity_wasm::elements::Instruction;
 
 use wasmdbg::vm::CodePosition;
 use wasmdbg::Debugger;
@@ -7,7 +6,7 @@ use wasmdbg::Debugger;
 use super::{CmdArg, CmdResult, Command, Commands};
 use crate::utils::{print_header, print_line};
 
-const DISASSEMBLY_DEFAULT_MAX_LINES: usize = 20;
+const DISASSEMBLY_DEFAULT_MAX_LINES: u32 = 18;
 
 pub fn add_cmds(commands: &mut Commands) {
     commands.add(
@@ -15,6 +14,12 @@ pub fn add_cmds(commands: &mut Commands) {
             .takes_args("[all|COUNT:usize]")
             .description("Print locals")
             .help("Print the values of the locals of the current function")
+            .requires_running(),
+    );
+    commands.add(
+        Command::new("nearpc", cmd_nearpc)
+            .takes_args("[FORWARDS:u32 [BACKWARDS:u32]]")
+            .description("Disassemble around current instruction")
             .requires_running(),
     );
     commands.add(
@@ -80,38 +85,44 @@ fn cmd_locals(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_disassemble(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
-    let index = match args.get(0) {
-        Some(CmdArg::U32(func_index)) => *func_index,
-        None => dbg.get_vm()?.ip().func_index,
-        _ => unreachable!(),
+fn cmd_nearpc(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
+    let (forward, back) = match args.get(0) {
+        Some(count) => {
+            let count = count.as_u32();
+            match args.get(1) {
+                Some(back) => (count, back.as_u32()),
+                None => (count, 2),
+            }
+        }
+        None => (DISASSEMBLY_DEFAULT_MAX_LINES, 2),
     };
-    if let Some(code) = dbg
+    let ip = dbg.get_vm()?.ip();
+    let code = dbg
         .get_file()?
         .module()
-        .get_func(index)
-        .map(|b| b.instructions())
-    {
-        if args.is_empty() && code.len() > DISASSEMBLY_DEFAULT_MAX_LINES {
-            let ip = dbg.get_vm()?.ip();
-            let start = if ip.instr_index as usize > code.len() - DISASSEMBLY_DEFAULT_MAX_LINES {
-                code.len() - DISASSEMBLY_DEFAULT_MAX_LINES
-            } else {
-                ip.instr_index.max(2) as usize - 2
-            };
-            let end = start + DISASSEMBLY_DEFAULT_MAX_LINES;
-            print_disassembly(
-                dbg,
-                CodePosition::new(index, start as u32),
-                &code[start..end],
-            );
-        } else {
-            print_disassembly(dbg, CodePosition::new(index, 0), code);
-        }
+        .get_func(ip.func_index)
+        .unwrap()
+        .instructions();
+    if forward + back >= code.len() as u32 {
+        print_disassembly(dbg, CodePosition::new(ip.func_index, 0), None)
     } else {
-        bail!("Invalid function index");
+        let start = ip.instr_index - back.min(ip.instr_index);
+        let end = (ip.instr_index + forward).min(code.len() as u32);
+        print_disassembly(
+            dbg,
+            CodePosition::new(ip.func_index, start),
+            Some(end - start),
+        )
     }
-    Ok(())
+}
+
+fn cmd_disassemble(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
+    match args.get(0) {
+        Some(func_index) => {
+            return print_disassembly(dbg, CodePosition::new(func_index.as_u32(), 0), None)
+        }
+        None => return cmd_nearpc(dbg, &[]),
+    }
 }
 
 fn cmd_stack(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
@@ -171,7 +182,7 @@ fn cmd_context(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     print_context(dbg)
 }
 
-fn print_disassembly(dbg: &Debugger, start: CodePosition, instrs: &[Instruction]) {
+fn print_disassembly(dbg: &Debugger, start: CodePosition, len: Option<u32>) -> CmdResult {
     let curr_instr_index = dbg.vm().and_then(|vm| {
         if vm.ip().func_index == start.func_index {
             Some(vm.ip().instr_index)
@@ -179,11 +190,25 @@ fn print_disassembly(dbg: &Debugger, start: CodePosition, instrs: &[Instruction]
             None
         }
     });
-    let max_index_len = (start.instr_index as usize + instrs.len() - 1)
-        .to_string()
-        .len();
+    let code = match dbg.get_file()?.module().get_func(start.func_index) {
+        Some(func) => {
+            ensure!(
+                !func.is_imported(),
+                "Cannot show disassembly of imported function"
+            );
+            let start = start.instr_index as usize;
+            if let Some(len) = len {
+                let end = start + len as usize;
+                &func.instructions()[start..end]
+            } else {
+                &func.instructions()[start..]
+            }
+        }
+        None => bail!("Invalid instruction index: {}", start.func_index),
+    };
+    let max_index_len = (start.instr_index as usize + code.len()).to_string().len();
     let breakpoints = dbg.breakpoints().ok();
-    for (i, instr) in instrs.iter().enumerate() {
+    for (i, instr) in code.iter().enumerate() {
         let instr_index = start.instr_index + i as u32;
         let addr_str = format!("{}:{:>02$}", start.func_index, instr_index, max_index_len);
         let breakpoint = match breakpoints {
@@ -202,13 +227,14 @@ fn print_disassembly(dbg: &Debugger, start: CodePosition, instrs: &[Instruction]
             println!("   {}{}   {}", breakpoint_str, addr_str, instr);
         }
     }
+    Ok(())
 }
 
 pub fn print_context(dbg: &mut Debugger) -> CmdResult {
     print_header("LOCALS");
     cmd_locals(dbg, &[])?;
     print_header("DISASM");
-    cmd_disassemble(dbg, &[])?;
+    cmd_nearpc(dbg, &[])?;
     print_header("VALUE STACK");
     cmd_stack(dbg, &[])?;
     print_header("LABEL STACK");
