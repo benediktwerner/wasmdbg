@@ -1,6 +1,12 @@
 more wasi
-print
-color disassembly
+arg parsing:
+- fix subcommand parsing (display subcommands if none given)
+- print proper arg for errors
+cmds:
+- reset
+- delete all
+- nearpc [all|SIZE]
+- print
 
 info elements
 info data
