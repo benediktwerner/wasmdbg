@@ -4,7 +4,6 @@ arg parsing:
 - print proper arg for errors
 cmds:
 - reset
-- delete all
 - nearpc [all|SIZE]
 - print
 

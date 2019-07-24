@@ -148,6 +148,10 @@ impl Debugger {
             .delete_breakpoint(index))
     }
 
+    pub fn clear_breakpoints(&mut self) -> DebuggerResult<()> {
+        Ok(self.get_file()?.breakpoints.borrow_mut().clear())
+    }
+
     pub fn run(&mut self) -> DebuggerResult<Trap> {
         Ok(self.create_vm()?.run())
     }

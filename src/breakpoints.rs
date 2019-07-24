@@ -180,6 +180,15 @@ impl Breakpoints {
         false
     }
 
+    pub fn clear(&mut self) {
+        self.code.clear();
+        self.memory_read.clear();
+        self.memory_write.clear();
+        self.global_read.clear();
+        self.global_write.clear();
+        self.index_map.clear();
+    }
+
     pub fn iter(&self) -> <&Self as iter::IntoIterator>::IntoIter {
         self.into_iter()
     }

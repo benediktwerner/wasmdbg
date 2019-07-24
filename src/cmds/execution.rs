@@ -41,7 +41,7 @@ pub fn add_cmds(commands: &mut Commands) {
     commands.add(
         Command::new("delete", cmd_delete)
             .description("Delete a breakpoint")
-            .takes_args("BREAKPOINT_INDEX:u32")
+            .takes_args("all|BREAKPOINT_INDEX:u32")
             .help("Delete the breakpoint with the specified index.")
             .requires_file(),
     );
@@ -168,6 +168,10 @@ fn cmd_watch_global(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
 }
 
 fn cmd_delete(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
+    if let CmdArg::Const("all") = args[0] {
+        dbg.clear_breakpoints()?;
+        return Ok(());
+    }
     let index = args[0].as_u32();
     if dbg.delete_breakpoint(index)? {
         println!("Breakpoint removed");
