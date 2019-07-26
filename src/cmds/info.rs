@@ -324,9 +324,21 @@ fn cmd_info_elements(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     Ok(())
 }
 
-fn cmd_info_data(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    // TODO: Implement
-    println!("Not implemented");
+fn cmd_info_data(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    let module = dbg.get_file()?.module();
+    print_count(module.data_entries().len(), "data initializer");
+    for entry in module.data_entries() {
+        let offset = match entry.offset() {
+            InitExpr::Const(val) => format!("{}", val.to::<u32>().unwrap()),
+            InitExpr::Global(index) => format!("of global {}", index),
+        };
+        println!(
+            " -> for memory {} at offset {} for 0x{:x} bytes",
+            entry.index(),
+            offset,
+            entry.value().len()
+        );
+    }
     Ok(())
 }
 
