@@ -85,10 +85,7 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
         }
         println!("{} imports", module.imports().len());
         if func_count > 0 {
-            println!(
-                " -> {} function imports (currently not supported)",
-                func_count
-            );
+            println!(" -> {} function imports", func_count);
         }
         if table_count > 0 {
             println!(" -> {} table imports (currently not supported)", func_count);
@@ -204,7 +201,7 @@ fn cmd_info_ip(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 
 fn cmd_info_types(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     let types = dbg.get_file()?.module().types();
-    println!("{} types", types.len());
+    print_count(types.len(), "type");
     for (i, entry) in types.iter().enumerate() {
         println!("Type {:>2}: {}", i, entry);
     }
@@ -213,7 +210,7 @@ fn cmd_info_types(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 
 fn cmd_info_imports(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     let module = dbg.get_file()?.module();
-    println!("{} imports", module.imports().len());
+    print_count(module.imports().len(), "import");
     for entry in module.imports() {
         match entry.external() {
             External::Function(type_index) => {
@@ -289,7 +286,7 @@ fn cmd_info_globals(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 
 fn cmd_info_exports(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     let module = dbg.get_file()?.module();
-    println!("{} exports", module.exports().len());
+    print_count(module.exports().len(), "export");
     for entry in module.exports() {
         match entry.internal() {
             Internal::Function(index) => println!(
