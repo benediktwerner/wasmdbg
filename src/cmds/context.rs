@@ -119,10 +119,9 @@ fn cmd_nearpc(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
 
 fn cmd_disassemble(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
     match args.get(0) {
-        Some(func_index) => {
-            return print_disassembly(dbg, CodePosition::new(func_index.as_u32(), 0), None)
-        }
-        None => return cmd_nearpc(dbg, &[]),
+        Some(func_index) => print_disassembly(dbg, CodePosition::new(func_index.as_u32(), 0), None),
+
+        None => cmd_nearpc(dbg, &[]),
     }
 }
 

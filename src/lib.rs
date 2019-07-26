@@ -141,7 +141,8 @@ impl Debugger {
     }
 
     pub fn clear_breakpoints(&mut self) -> DebuggerResult<()> {
-        Ok(self.get_file()?.breakpoints.borrow_mut().clear())
+        self.get_file()?.breakpoints.borrow_mut().clear();
+        Ok(())
     }
 
     pub fn run(&mut self) -> DebuggerResult<Trap> {

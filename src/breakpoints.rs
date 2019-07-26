@@ -41,6 +41,7 @@ pub enum Breakpoint {
     Global(BreakpointTrigger, u32),
 }
 
+#[derive(Default)]
 pub struct Breakpoints {
     code: HashSet<CodePosition>,
     memory_read: HashSet<u32>,
