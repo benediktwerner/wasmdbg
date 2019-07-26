@@ -1,6 +1,6 @@
 use wasmdbg::breakpoints::Breakpoint;
 use wasmdbg::vm::Trap;
-use wasmdbg::wasm::{External, InitExpr, PAGE_SIZE};
+use wasmdbg::wasm::{External, InitExpr, Internal, PAGE_SIZE};
 use wasmdbg::Debugger;
 
 use super::{CmdArg, CmdResult, Command, Commands};
@@ -282,23 +282,28 @@ fn cmd_info_memory(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 
 fn cmd_info_globals(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     for (i, global) in dbg.get_file()?.module().globals().iter().enumerate() {
-        let const_str = if global.is_mutable() {
-            "mut  "
-        } else {
-            "const"
-        };
-        let init_str = match global.init_expr() {
-            InitExpr::Const(val) => format!("{}", val),
-            InitExpr::Global(index) => format!("global {}", index),
-        };
-        println!(" {}: {} {:15} = {}", i, const_str, global.name(), init_str);
+        println!(" {}: {}", i, global);
     }
     Ok(())
 }
 
-fn cmd_info_exports(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    // TODO: Implement
-    println!("Not implemented");
+fn cmd_info_exports(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    let module = dbg.get_file()?.module();
+    println!("{} exports", module.exports().len());
+    for entry in module.exports() {
+        match entry.internal() {
+            Internal::Function(index) => println!(
+                "Function {}: {}",
+                index,
+                &module.functions()[*index as usize]
+            ),
+            Internal::Table(index) => println!("Table {}", index),
+            Internal::Memory(index) => println!("Memory {}", index),
+            Internal::Global(index) => {
+                println!("Global {}: {}", index, &module.globals()[*index as usize])
+            }
+        }
+    }
     Ok(())
 }
 

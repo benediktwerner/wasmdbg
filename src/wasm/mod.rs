@@ -201,6 +201,17 @@ impl Global {
     }
 }
 
+impl fmt::Display for Global {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let const_str = if self.is_mutable() { "mut  " } else { "const" };
+        let init_str = match self.init_expr() {
+            InitExpr::Const(val) => format!("{}", val),
+            InitExpr::Global(index) => format!("global {}", index),
+        };
+        write!(f, "{} {:15} = {}", const_str, self.name(), init_str)
+    }
+}
+
 pub struct ElementSegment {
     index: u32,
     offset: InitExpr,
