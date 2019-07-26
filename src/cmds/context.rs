@@ -1,8 +1,8 @@
 use colored::*;
 
 use wasmdbg::vm::CodePosition;
-use wasmdbg::Debugger;
 use wasmdbg::wasm::Instruction;
+use wasmdbg::Debugger;
 
 use super::{CmdArg, CmdResult, Command, Commands};
 use crate::utils::{print_header, print_line};
@@ -222,6 +222,7 @@ fn print_disassembly(dbg: &Debugger, start: CodePosition, len: Option<u32>) -> C
     };
     let max_index_len = (start.instr_index as usize + code.len()).to_string().len();
     let breakpoints = dbg.breakpoints().ok();
+    let mut indent = calc_start_indent(code);
     for (i, instr) in code.iter().enumerate() {
         let instr_index = start.instr_index + i as u32;
         let addr_str = format!("{}:{:>02$}", start.func_index, instr_index, max_index_len);
@@ -235,18 +236,78 @@ fn print_disassembly(dbg: &Debugger, start: CodePosition, len: Option<u32>) -> C
             Some(_) => "*".red().to_string(),
             None => " ".to_string(),
         };
+        let instr_str = format_instr(dbg, instr)?;
+        match instr {
+            Instruction::Else => indent -= 1,
+            Instruction::End => indent -= 1,
+            _ => (),
+        }
         if curr_instr_index.map_or(false, |i| i == instr_index) {
             // TODO: if instr is call: print args
-            println!("=> {}{}   {}", breakpoint_str, addr_str.green(), instr);
+            println!(
+                "=> {}{}   {: >4$}{}",
+                breakpoint_str,
+                addr_str.green(),
+                "",
+                instr_str,
+                indent
+            );
         } else {
-            println!("   {}{}   {}", breakpoint_str, addr_str, instr);
+            println!(
+                "   {}{}   {: >4$}{}",
+                breakpoint_str, addr_str, "", instr_str, indent
+            );
+        }
+        match instr {
+            Instruction::Block(_) => indent += 1,
+            Instruction::Loop(_) => indent += 1,
+            Instruction::If(_) => indent += 1,
+            Instruction::Else => indent += 1,
+            _ => (),
         }
     }
     Ok(())
 }
 
-fn format_instr(dbg: &Debugger, instr: Instruction) -> CmdResult<String> {
+fn format_instr(dbg: &Debugger, instr: &Instruction) -> Result<String, failure::Error> {
+    let result = match instr {
+        Instruction::Call(index) => format!(
+            "{} <{}>",
+            instr,
+            dbg.get_file()?.module().get_func(*index).unwrap().name()
+        ),
+        _ => instr.to_string(),
+    };
+    Ok(result)
+}
 
+fn calc_start_indent(code: &[Instruction]) -> usize {
+    let mut indent: isize = 0;
+    let mut min_indent: isize = 0;
+    for instr in code {
+        match instr {
+            Instruction::Block(_) => indent += 1,
+            Instruction::Loop(_) => indent += 1,
+            Instruction::If(_) => indent += 1,
+            Instruction::Else => {
+                if indent == min_indent {
+                    min_indent -= 1;
+                }
+            }
+            Instruction::End => {
+                indent -= 1;
+                if indent < min_indent {
+                    min_indent = indent;
+                }
+            }
+            _ => (),
+        }
+    }
+    if min_indent < 0 {
+        (-min_indent) as usize
+    } else {
+        0
+    }
 }
 
 pub fn print_context(dbg: &mut Debugger) -> CmdResult {
