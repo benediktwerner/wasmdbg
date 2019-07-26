@@ -7,6 +7,7 @@ use super::{CmdArg, CmdResult, Command, Commands};
 pub fn add_cmds(commands: &mut Commands) {
     commands.add(
         Command::new("load", cmd_load)
+            .alias("file")
             .takes_args("FILE:path")
             .description("Load a wasm binary")
             .help("Load the wasm binary FILE."),
