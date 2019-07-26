@@ -39,7 +39,7 @@ fn cmd_x(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
                 _ => unreachable!(),
             };
             println!(" 0x{:08x}: {}", addr, val_str);
-            addr += count * size;
+            addr += size;
         }
     }
     Ok(())
