@@ -2,6 +2,7 @@ use colored::*;
 
 use wasmdbg::vm::CodePosition;
 use wasmdbg::Debugger;
+use wasmdbg::wasm::Instruction;
 
 use super::{CmdArg, CmdResult, Command, Commands};
 use crate::utils::{print_header, print_line};
@@ -178,6 +179,19 @@ fn cmd_backtrace(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
     Ok(())
 }
 
+fn cmd_globals(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
+    let globals = dbg.globals()?;
+    if globals.is_empty() {
+        println!("<no locals>");
+    } else {
+        let max_index_len = globals.len().to_string().len();
+        for (i, global) in globals.iter().enumerate() {
+            println!("Global {:>2$}: {}", i, global, max_index_len);
+        }
+    }
+    Ok(())
+}
+
 fn cmd_context(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     print_context(dbg)
 }
@@ -222,12 +236,17 @@ fn print_disassembly(dbg: &Debugger, start: CodePosition, len: Option<u32>) -> C
             None => " ".to_string(),
         };
         if curr_instr_index.map_or(false, |i| i == instr_index) {
+            // TODO: if instr is call: print args
             println!("=> {}{}   {}", breakpoint_str, addr_str.green(), instr);
         } else {
             println!("   {}{}   {}", breakpoint_str, addr_str, instr);
         }
     }
     Ok(())
+}
+
+fn format_instr(dbg: &Debugger, instr: Instruction) -> CmdResult<String> {
+
 }
 
 pub fn print_context(dbg: &mut Debugger) -> CmdResult {
@@ -242,18 +261,5 @@ pub fn print_context(dbg: &mut Debugger) -> CmdResult {
     print_header("BACKTRACE");
     cmd_backtrace(dbg, &[])?;
     print_line();
-    Ok(())
-}
-
-fn cmd_globals(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    let globals = dbg.globals()?;
-    if globals.is_empty() {
-        println!("<no locals>");
-    } else {
-        let max_index_len = globals.len().to_string().len();
-        for (i, global) in globals.iter().enumerate() {
-            println!("Global {:>2$}: {}", i, global, max_index_len);
-        }
-    }
     Ok(())
 }

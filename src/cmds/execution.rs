@@ -35,6 +35,7 @@ pub fn add_cmds(commands: &mut Commands) {
         );
     commands.add(
             Command::new_subcommand("watch")
+            .description("Set a watchpoint")
             .requires_file()
             .add_subcommand(Command::new("memory", cmd_watch_memory).takes_args("ADDR:addr [read|write]").description("Watch a memory location").help("Watch the memory at address ADDR and pause execution when it's value is read/written."))
             .add_subcommand(Command::new("global", cmd_watch_global).takes_args("INDEX:u32 [read|write]").description("Watch a global").help("Watch the global with index INDEX and pause execution when it's value is read/written."))
