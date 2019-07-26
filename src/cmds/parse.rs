@@ -271,7 +271,7 @@ fn parse_format(fmt_str: &str) -> Result<(u32, u32, Format), Error> {
         count_str.parse()?
     };
     let mut size = 4;
-    let mut format = Format::Decimal;
+    let mut format = Format::Hex;
     for c in fmt_str.chars().skip_while(|c| c.is_numeric()) {
         match c {
             'b' => size = 1,
