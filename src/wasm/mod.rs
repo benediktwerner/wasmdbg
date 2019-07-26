@@ -320,12 +320,11 @@ impl Module {
     }
 
     fn from_parity_module(module: parity_wasm::elements::Module) -> Self {
-        // TODO: Use name section
-        // Problem: What happens when multiple functions have the same name?
-        // let module = match module.parse_names() {
-        //     Ok(module) => module,
-        //     Err((_, module)) => module,
-        // };
+        // TODO: What happens when multiple functions have the same name?
+        let module = match module.parse_names() {
+            Ok(module) => module,
+            Err((_, module)) => module,
+        };
 
         let mut types = Vec::new();
         if let Some(type_sec) = module.type_section() {
@@ -427,6 +426,14 @@ impl Module {
                     globals[*index as usize].name = export.field().to_string()
                 }
                 _ => (),
+            }
+        }
+
+        if let Some(name_sec) = module.names_section() {
+            if let Some(func_names) = name_sec.functions() {
+                for (i, name) in func_names.names() {
+                    functions[i as usize].name = name.clone();
+                }
             }
         }
 

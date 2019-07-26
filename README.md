@@ -36,7 +36,7 @@ $ ./target/debug/wasmdbg --version
 - Modify program state: `set local/global/memory/stack`)
 - Print info about the binary: `info file/imports/exports/functions/tables/memory/globals/start`
 - Call a specific functions with any arguments: `call`
-- Automatically read function and global names from export section
+- Automatically read function and global names from export and names section
 - Specify startup commands in a `.wasmdbg_init` file
 - Run a python interpreter: `python`
 
