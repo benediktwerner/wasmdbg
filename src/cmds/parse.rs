@@ -300,7 +300,7 @@ impl TryFrom<char> for Format {
             'u' => Format::Unsigned,
             'x' => Format::Hex,
             'o' => Format::Octal,
-            'b' => Format::Binary,
+            't' => Format::Binary,
             'f' => Format::Float,
             'c' => Format::Char,
             's' => Format::Str,
