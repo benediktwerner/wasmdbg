@@ -29,6 +29,22 @@ pub fn add_cmds(commands: &mut Commands) {
                     .help(
                         "Replace the value at index INDEX on the stack. The type of the value will be unchanged to preserve wasm validation guarantees.",
                     ),
+            )
+            .add_subcommand(
+                Command::new("local", cmd_set_local)
+                    .takes_args("INDEX:usize = VAL:str")
+                    .description("Modify the value of a local")
+                    .help(
+                        "Replace the value of the local with index INDEX.",
+                    ),
+            )
+            .add_subcommand(
+                Command::new("stack", cmd_set_global)
+                    .takes_args("INDEX:usize = VAL:str")
+                    .description("Modify the value of a global")
+                    .help(
+                        "Replace the value of the global with index INDEX.",
+                    ),
             ),
     );
 }
@@ -93,4 +109,38 @@ fn cmd_set_stack(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
     }
 
     context::print_context(dbg)
+}
+
+fn cmd_set_local(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
+    let index = args[0].as_usize();
+    let val = args[2].as_string();
+    let locals = dbg.get_vm_mut()?.locals_mut()?;
+
+    ensure!(index < locals.len(), "Index out of range");
+
+    match locals[index].value_type() {
+        ValueType::I32 => locals[index] = (i64::from_str_with_radix(&val)? as u32).into(),
+        ValueType::I64 => locals[index] = (i128::from_str_with_radix(&val)? as u64).into(),
+        ValueType::F32 => locals[index] = val.parse::<f32>()?.into(),
+        ValueType::F64 => locals[index] = val.parse::<f64>()?.into(),
+    }
+
+    context::print_context(dbg)
+}
+
+fn cmd_set_global(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
+    let index = args[0].as_usize();
+    let val = args[2].as_string();
+    let globals = dbg.get_vm_mut()?.globals_mut();
+
+    ensure!(index < globals.len(), "Index out of range");
+
+    match globals[index].value_type() {
+        ValueType::I32 => globals[index] = (i64::from_str_with_radix(&val)? as u32).into(),
+        ValueType::I64 => globals[index] = (i128::from_str_with_radix(&val)? as u64).into(),
+        ValueType::F32 => globals[index] = val.parse::<f32>()?.into(),
+        ValueType::F64 => globals[index] = val.parse::<f64>()?.into(),
+    }
+
+    Ok(())
 }

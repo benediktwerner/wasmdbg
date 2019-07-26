@@ -66,7 +66,7 @@ fn cmd_locals(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
         None => 17,
         _ => unreachable!(),
     };
-    let locals = dbg.locals()?;
+    let locals = dbg.get_vm()?.locals()?;
     if locals.is_empty() {
         println!("<no locals>");
     } else {

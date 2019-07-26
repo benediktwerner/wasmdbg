@@ -33,7 +33,7 @@ $ ./target/debug/wasmdbg --version
 - Step-out of function: `finish`
 - View disassembly: `disas`
 - View program state: `context`, `locals`, `globals`, value `stack`, `backtrace` and `labels` stack
-- Modify program state: `set memory` and `set stack`)
+- Modify program state: `set local/global/memory/stack`)
 - Print info about the binary: `info file/imports/exports/functions/tables/memory/globals/start`
 - Call a specific functions with any arguments: `call`
 - Automatically read function and global names from export section

@@ -97,14 +97,6 @@ impl Debugger {
         Ok(backtrace)
     }
 
-    pub fn locals(&self) -> DebuggerResult<&[Value]> {
-        if let Some(frame) = self.get_vm()?.function_stack().last() {
-            Ok(&frame.locals)
-        } else {
-            Ok(&[])
-        }
-    }
-
     pub fn globals(&self) -> DebuggerResult<&[Value]> {
         Ok(self.get_vm()?.globals())
     }

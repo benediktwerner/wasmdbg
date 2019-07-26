@@ -328,6 +328,10 @@ impl VM {
         &self.globals
     }
 
+    pub fn globals_mut(&mut self) -> &mut [Value] {
+        &mut self.globals
+    }
+
     pub fn memory(&self) -> &Memory {
         &self.memory
     }
@@ -356,7 +360,14 @@ impl VM {
         })
     }
 
-    fn locals(&mut self) -> VMResult<&mut [Value]> {
+    pub fn locals(&self) -> VMResult<&[Value]> {
+        if let Some(frame) = self.function_stack.last() {
+            return Ok(&frame.locals);
+        }
+        Err(Trap::NoFunctionFrame)
+    }
+
+    pub fn locals_mut(&mut self) -> VMResult<&mut [Value]> {
         if let Some(frame) = self.function_stack.last_mut() {
             return Ok(&mut frame.locals);
         }
@@ -725,16 +736,16 @@ impl VM {
                 }
             }
             Instruction::GetLocal(index) => {
-                let val = self.locals()?[index as usize];
+                let val = self.locals_mut()?[index as usize];
                 self.push(val)?;
             }
             Instruction::SetLocal(index) => {
                 let val = self.pop()?;
-                self.locals()?[index as usize] = val;
+                self.locals_mut()?[index as usize] = val;
             }
             Instruction::TeeLocal(index) => {
                 let val = self.value_stack.last().ok_or(Trap::PopFromEmptyStack)?;
-                self.locals()?[index as usize] = *val;
+                self.locals_mut()?[index as usize] = *val;
             }
             Instruction::GetGlobal(index) => {
                 let val = self.globals[index as usize];
