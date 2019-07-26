@@ -646,7 +646,6 @@ impl VM {
         }
 
         let instr = func.instructions()[self.ip.instr_index as usize].clone();
-        println!("{} {}", self.ip, instr);
         self.ip.instr_index += 1;
 
         match instr {
