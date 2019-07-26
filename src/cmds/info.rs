@@ -67,8 +67,8 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     println!("File: {}", file.file_path());
     println!("{} types", module.types().len());
     println!("{} functions", module.functions().len());
-    println!("{} globals", module.globals().len());
-    println!("{} tables", module.tables().len());
+    print_count(module.globals().len(), "global");
+    print_count(module.tables().len(), "table");
 
     {
         let mut func_count = 0;
@@ -107,8 +107,12 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
         }
     }
 
-    println!("{} exports", module.exports().len());
-    println!("{} linear memories", module.memories().len());
+    print_count(module.exports().len(), "export");
+    match module.memories().len() {
+        0 => println!("no linear memory"),
+        1 => println!("1 linear memory"),
+        count => println!("{} linear memories", count),
+    }
 
     for (i, entry) in module.memories().iter().enumerate() {
         let limits = entry.limits();
@@ -128,8 +132,8 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
         }
     }
 
-    println!("{} table initializers", module.element_entries().len());
-    println!("{} data initializers", module.data_entries().len());
+    print_count(module.element_entries().len(), "table initializer");
+    print_count(module.data_entries().len(), "data initializer");
 
     for entry in module.data_entries() {
         let offset = match entry.offset() {
@@ -145,7 +149,7 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     }
 
     if !module.custom_sections().is_empty() {
-        println!("{} custom sections", module.custom_sections().len());
+        print_count(module.custom_sections().len(), "custom section");
         for custom_sec in module.custom_sections() {
             println!(
                 " -> {}: {} bytes",
@@ -156,6 +160,14 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     }
 
     Ok(())
+}
+
+fn print_count(count: usize, name: &str) {
+    match count {
+        0 => println!("no {}s", name),
+        1 => println!("1 {}", name),
+        _ => println!("{} {}s", count, name),
+    }
 }
 
 fn cmd_info_break(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
