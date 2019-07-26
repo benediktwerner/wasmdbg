@@ -323,7 +323,12 @@ impl Module {
         // TODO: What happens when multiple functions have the same name?
         let module = match module.parse_names() {
             Ok(module) => module,
-            Err((_, module)) => module,
+            Err((errors, module)) => {
+                for (_, error) in errors {
+                    println!("Failed to parse name section: {}", error);
+                }
+                module
+            }
         };
 
         let mut types = Vec::new();
