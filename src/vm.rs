@@ -73,7 +73,7 @@ pub enum Trap {
     InvalidBranchIndex,
     #[fail(display = "Out of range memory access at address {:#08x}", _0)]
     MemoryAccessOutOfRange(u32),
-    #[fail(display = "Tried to call imported function: {} (unsupported)", _0)]
+    #[fail(display = "Tried to call unsupported imported function: {}", _0)]
     UnsupportedCallToImportedFunction(u32),
     #[fail(display = "Value stack overflow")]
     ValueStackOverflow,
