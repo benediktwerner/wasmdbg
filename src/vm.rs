@@ -340,7 +340,7 @@ impl VM {
         &mut self.memory
     }
 
-    fn push(&mut self, val: Value) -> VMResult<()> {
+    pub(crate) fn push(&mut self, val: Value) -> VMResult<()> {
         if self.value_stack.len() >= VALUE_STACK_LIMIT {
             return Err(Trap::ValueStackOverflow);
         }
@@ -348,7 +348,7 @@ impl VM {
         Ok(())
     }
 
-    fn pop(&mut self) -> VMResult<Value> {
+    pub(crate) fn pop(&mut self) -> VMResult<Value> {
         self.value_stack.pop().ok_or(Trap::PopFromEmptyStack)
     }
 
@@ -651,7 +651,17 @@ impl VM {
         let func = self.module.get_func(self.ip.func_index).unwrap();
         if func.is_imported() {
             if let Some(wasi_func) = func.wasi_function() {
-                return wasi_func.handle(self);
+                wasi_func.handle(self)?;
+                loop {
+                    if let Some(Label::Return) = self.label_stack.pop() {
+                        if !self.label_stack.is_empty() {
+                            let frame = self.function_stack.pop().unwrap();
+                            self.ip = frame.ret_addr;
+                        }
+                        break;
+                    }
+                }
+                return Ok(());
             }
             return Err(Trap::UnsupportedCallToImportedFunction(self.ip.func_index));
         }
