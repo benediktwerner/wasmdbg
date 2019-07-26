@@ -184,8 +184,18 @@ fn cmd_globals(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
         println!("<no locals>");
     } else {
         let max_index_len = globals.len().to_string().len();
-        for (i, global) in globals.iter().enumerate() {
-            println!("Global {:>2$}: {}", i, global, max_index_len);
+        for (i, (val, global)) in globals
+            .iter()
+            .zip(dbg.get_file()?.module().globals())
+            .enumerate()
+        {
+            println!(
+                "Global {:>3$}: {:15} : {}",
+                i,
+                global.name(),
+                val,
+                max_index_len
+            );
         }
     }
     Ok(())
