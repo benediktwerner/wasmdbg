@@ -708,8 +708,8 @@ impl VM {
                     if !self.label_stack.is_empty() {
                         let frame = self.function_stack.pop().unwrap();
                         self.ip = frame.ret_addr;
-                        break;
                     }
+                    break;
                 }
             },
 
