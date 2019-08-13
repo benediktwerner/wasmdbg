@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::fmt;
 use std::str::FromStr;
 
@@ -112,7 +111,7 @@ impl From<F64> for Value {
     }
 }
 
-pub trait Number: Into<Value> + Copy + Any + fmt::Display {
+pub trait Number: Into<Value> + Copy + fmt::Display {
     fn value_type() -> ValueType;
     fn from_value(val: Value) -> Option<Self>;
 }
