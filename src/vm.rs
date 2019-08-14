@@ -146,6 +146,9 @@ impl Memory {
                         None => return Err(InitError::OffsetInvalidType(offset.value_type())),
                     };
                     let len = data_segment.value().len();
+                    if offset + len > data.len() {
+                        data.resize(offset + len, 0);
+                    }
                     data[offset..offset + len].copy_from_slice(data_segment.value());
                 }
             }
