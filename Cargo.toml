@@ -5,18 +5,15 @@ authors = ["Benedikt Werner <1benediktwerner@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-parity-wasm = "0.39"
-wasmi-validation = "0.1"
-clap = "2.33.0"
+parity-wasm = "0.40"
+wasmi-validation = "0.2"
+clap = "2.33"
 colored = "1.8"
 linefeed = "0.6"
-shellexpand = "1.0.0"
-lazy_static = "1.3.0"
+shellexpand = "1.0"
+lazy_static = "1.3"
 failure = "0.1"
 terminal_size = "0.1"
 
 [dev-dependencies]
-rand = "0.7.0"
-
-[replace]
-"wasmi-validation:0.1.0" = { git = 'https://github.com/paritytech/wasmi' }
+rand = "0.7"
