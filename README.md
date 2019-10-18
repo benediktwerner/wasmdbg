@@ -4,17 +4,16 @@
 
 ## Building and Installation
 
-Building and installing `wasmdbg` requires a [Rust Installation](https://www.rust-lang.org/).
+Building or installing `wasmdbg` requires a [Rust Installation](https://www.rust-lang.org/).
 
 To install `wasmdbg`:
 
 ```
-$ git clone https://github.com/benediktwerner/wasmdbg
-$ cargo install --path wasmdbg
+$ cargo install wasmdbg
 $ wasmdbg --version
 ```
 
-To build `wasmdbg`:
+To build `wasmdbg` from source:
 ```
 $ git clone https://github.com/benediktwerner/wasmdbg
 $ cd wasmdbg
