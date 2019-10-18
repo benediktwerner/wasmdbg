@@ -2,6 +2,16 @@
 name = "wasmdbg"
 version = "0.1.0"
 authors = ["Benedikt Werner <1benediktwerner@gmail.com>"]
+
+description = "Debugger for wasm binaries"
+license = "MIT OR Apache-2.0"
+keywords = ["wasm", "debugger"]
+categories = ["wasm", "development-tools::debugging"]
+readme = "README.md"
+documentation = "https://docs.rs/wasmdbg"
+homepage = "https://github.com/benediktwerner/wasmdbg"
+repository = "https://github.com/benediktwerner/wasmdbg.git"
+
 edition = "2018"
 
 [dependencies]
