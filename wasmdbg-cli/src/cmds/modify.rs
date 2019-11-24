@@ -1,9 +1,8 @@
 use std::convert::TryFrom;
 
+use bwasm::ValueType;
 use failure::Error;
-
 use wasmdbg::value::Integer;
-use wasmdbg::wasm::ValueType;
 use wasmdbg::Debugger;
 
 use super::context;
@@ -80,7 +79,7 @@ fn cmd_set_memory(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
     let val = val.as_str();
     let val_type = ValType::try_from(args[3].as_string().as_str())?;
 
-    let memory = dbg.get_vm_mut()?.memory_mut();
+    let memory = dbg.get_vm_mut()?.default_memory_mut()?;
 
     match val_type {
         ValType::I8 => memory.store(addr, i16::from_str_with_radix(val)? as u8)?,

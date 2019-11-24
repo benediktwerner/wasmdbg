@@ -1,15 +1,15 @@
 use std::fmt;
 use std::str::FromStr;
 
-use parity_wasm::elements::ValueType;
+use bwasm::ValueType;
 
-use crate::nan_preserving_float::{F32, F64};
 use crate::vm::{Trap, VMResult};
+use crate::{F32, F64};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Value {
-    I32(u32),
-    I64(u64),
+    I32(i32),
+    I64(i64),
     F32(F32),
     F64(F64),
 }
@@ -39,8 +39,8 @@ impl Value {
 
     pub fn from_str(s: &str, value_type: ValueType) -> Option<Self> {
         Some(match value_type {
-            ValueType::I32 => Value::I32(i64::from_str(s).ok()? as u32),
-            ValueType::I64 => Value::I64(i128::from_str(s).ok()? as u64),
+            ValueType::I32 => Value::I32(i64::from_str(s).ok()? as i32),
+            ValueType::I64 => Value::I64(i128::from_str(s).ok()? as i64),
             ValueType::F32 => Value::from(f32::from_str(s).ok()?),
             ValueType::F64 => Value::from(f64::from_str(s).ok()?),
         })
@@ -72,22 +72,22 @@ impl fmt::Display for Value {
 
 impl From<i32> for Value {
     fn from(val: i32) -> Self {
-        Value::from(val as u32)
+        Value::I32(val)
     }
 }
 impl From<u32> for Value {
     fn from(val: u32) -> Self {
-        Value::I32(val)
+        Value::I32(val as i32)
     }
 }
 impl From<i64> for Value {
     fn from(val: i64) -> Self {
-        Value::from(val as u64)
+        Value::I64(val)
     }
 }
 impl From<u64> for Value {
     fn from(val: u64) -> Self {
-        Value::I64(val)
+        Value::I64(val as i64)
     }
 }
 impl From<f32> for Value {
@@ -117,7 +117,7 @@ pub trait Number: Into<Value> + Copy + fmt::Display {
 }
 
 macro_rules! impl_number {
-    ($num_t:ident, $value_t:ident) => {
+    (float $num_t:ident, $value_t:ident) => {
         impl Number for $num_t {
             fn value_type() -> ValueType {
                 ValueType::$value_t
@@ -131,14 +131,30 @@ macro_rules! impl_number {
             }
         }
     };
+    (int $num_t:ident, $value_t:ident) => {
+        impl Number for $num_t {
+            fn value_type() -> ValueType {
+                ValueType::$value_t
+            }
+
+            fn from_value(val: Value) -> Option<Self> {
+                if let Value::$value_t(val) = val {
+                    return Some(val as $num_t);
+                }
+                None
+            }
+        }
+    };
 }
 
-impl_number!(u32, I32);
-impl_number!(u64, I64);
-impl_number!(f32, F32);
-impl_number!(f64, F64);
-impl_number!(F32, F32);
-impl_number!(F64, F64);
+impl_number!(int u32, I32);
+impl_number!(int i32, I32);
+impl_number!(int u64, I64);
+impl_number!(int i64, I64);
+impl_number!(float f32, F32);
+impl_number!(float f64, F64);
+impl_number!(float F32, F32);
+impl_number!(float F64, F64);
 
 pub trait Integer: Sized {
     fn leading_zeros(self) -> Self;

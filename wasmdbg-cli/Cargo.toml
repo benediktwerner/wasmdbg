@@ -1,0 +1,33 @@
+[package]
+name = "wasmdbg-cli"
+version = "0.1.0"
+authors = ["Benedikt Werner <1benediktwerner@gmail.com>"]
+
+description = "Debugger for wasm binaries"
+license = "MIT OR Apache-2.0"
+keywords = ["wasm", "webassembly", "debugger"]
+categories = ["wasm", "development-tools::debugging"]
+readme = "README.md"
+documentation = "https://docs.rs/wasmdbg"
+homepage = "https://github.com/benediktwerner/wasmdbg"
+repository = "https://github.com/benediktwerner/wasmdbg.git"
+
+edition = "2018"
+
+[[bin]]
+name = "wasmdbg"
+path = "src/main.rs"
+
+[dependencies]
+wasmdbg = { path = "../wasmdbg" }
+bwasm = { path = "../../bwasm" }
+clap = "2.33"
+colored = "1.9"
+linefeed = "0.6"
+shellexpand = "1.0"
+lazy_static = "1.4"
+failure = "0.1"
+terminal_size = "0.1"
+
+[dev-dependencies]
+rand = "0.7"

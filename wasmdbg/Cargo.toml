@@ -1,0 +1,24 @@
+[package]
+name = "wasmdbg"
+version = "0.1.0"
+authors = ["Benedikt Werner <1benediktwerner@gmail.com>"]
+
+description = "Debugger for wasm binaries"
+license = "MIT OR Apache-2.0"
+keywords = ["wasm", "webassembly", "debugger"]
+categories = ["wasm", "development-tools::debugging"]
+readme = "README.md"
+documentation = "https://docs.rs/wasmdbg"
+homepage = "https://github.com/benediktwerner/wasmdbg"
+repository = "https://github.com/benediktwerner/wasmdbg.git"
+
+edition = "2018"
+
+[dependencies]
+parity-wasm = "0.41"
+wasmi-validation = "0.3"
+bwasm = { path = "../../bwasm" }
+failure = "0.1"
+
+[dev-dependencies]
+rand = "0.7"

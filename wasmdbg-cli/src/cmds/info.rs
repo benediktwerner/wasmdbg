@@ -1,7 +1,6 @@
-use wasmdbg::breakpoints::Breakpoint;
+use bwasm::{External, InitExpr, Internal, PAGE_SIZE};
 use wasmdbg::vm::Trap;
-use wasmdbg::wasm::{External, InitExpr, Internal, PAGE_SIZE};
-use wasmdbg::Debugger;
+use wasmdbg::{Breakpoint, Debugger};
 
 use super::{CmdArg, CmdResult, Command, Commands};
 
@@ -12,8 +11,7 @@ pub fn add_cmds(commands: &mut Commands) {
             .description("Print info about the programm being debugged")
             .requires_file()
             .add_subcommand(
-                Command::new("file", cmd_info_file)
-                    .description("Print info about the currently loaded binary"),
+                Command::new("file", cmd_info_file).description("Print info about the currently loaded binary"),
             )
             .add_subcommand(
                 Command::new("breakpoints", cmd_info_break)
@@ -26,26 +24,18 @@ pub fn add_cmds(commands: &mut Commands) {
                     .requires_running(),
             )
             .add_subcommand(Command::new("types", cmd_info_types).description("Print type section"))
-            .add_subcommand(
-                Command::new("imports", cmd_info_imports).description("Print import section"),
-            )
+            .add_subcommand(Command::new("imports", cmd_info_imports).description("Print import section"))
             .add_subcommand(
                 Command::new("functions", cmd_info_functions)
                     .alias("funcs")
                     .description("Print function section"),
             )
             .add_subcommand(Command::new("tables", cmd_info_tables).description("Print tables"))
-            .add_subcommand(
-                Command::new("memory", cmd_info_memory).description("Print memory section"),
-            )
+            .add_subcommand(Command::new("memory", cmd_info_memory).description("Print memory section"))
             .add_subcommand(Command::new("globals", cmd_info_globals).description("Print globals"))
             .add_subcommand(Command::new("exports", cmd_info_exports).description("Print exports"))
-            .add_subcommand(
-                Command::new("start", cmd_info_start).description("Print start section"),
-            )
-            .add_subcommand(
-                Command::new("elements", cmd_info_elements).description("Print element section"),
-            )
+            .add_subcommand(Command::new("start", cmd_info_start).description("Print start section"))
+            .add_subcommand(Command::new("elements", cmd_info_elements).description("Print element section"))
             .add_subcommand(Command::new("data", cmd_info_data).description("Print data section"))
             .add_subcommand(
                 Command::new("custom", cmd_info_custom)
@@ -91,16 +81,10 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
             println!(" -> {} table imports (currently not supported)", func_count);
         }
         if memory_count > 0 {
-            println!(
-                " -> {} memory imports (currently not supported)",
-                memory_count
-            );
+            println!(" -> {} memory imports (currently not supported)", memory_count);
         }
         if global_count > 0 {
-            println!(
-                " -> {} global imports (currently not supported)",
-                global_count
-            );
+            println!(" -> {} global imports (currently not supported)", global_count);
         }
     }
 
@@ -121,38 +105,31 @@ fn cmd_info_file(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
                 max * PAGE_SIZE
             );
         } else {
-            println!(
-                " -> Memory {:>2}: Min. 0x{:x} bytes",
-                i,
-                limits.initial() * PAGE_SIZE
-            );
+            println!(" -> Memory {:>2}: Min. 0x{:x} bytes", i, limits.initial() * PAGE_SIZE);
         }
     }
 
-    print_count(module.element_entries().len(), "table initializer");
-    print_count(module.data_entries().len(), "data initializer");
+    print_count(module.table_inits().len(), "table initializer");
+    print_count(module.memory_inits().len(), "data initializer");
 
-    for entry in module.data_entries() {
+    for entry in module.memory_inits() {
         let offset = match entry.offset() {
-            InitExpr::Const(val) => format!("{}", val.to::<u32>().unwrap()),
+            InitExpr::I32Const(val) => format!("{}", val),
             InitExpr::Global(index) => format!("of global {}", index),
+            _ => unreachable!(),
         };
         println!(
             " -> for memory {} at offset {} for 0x{:x} bytes",
             entry.index(),
             offset,
-            entry.value().len()
+            entry.data().len()
         );
     }
 
     if !module.custom_sections().is_empty() {
         print_count(module.custom_sections().len(), "custom section");
         for custom_sec in module.custom_sections() {
-            println!(
-                " -> {}: {} bytes",
-                custom_sec.name(),
-                custom_sec.payload().len()
-            );
+            println!(" -> {}: {} bytes", custom_sec.name(), custom_sec.payload().len());
         }
     }
 
@@ -177,15 +154,9 @@ fn cmd_info_break(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     println!("Num\tType\t\tWhere");
     for (i, breakpoint) in breakpoints {
         match breakpoint {
-            Breakpoint::Code(pos) => {
-                println!("{}\tbreakpoint\t{}\t{}", i, pos.func_index, pos.instr_index)
-            }
-            Breakpoint::Memory(trigger, addr) => {
-                println!("{}\twatchpoint\tMemory\t0x{:>08x}\t{}", i, addr, trigger)
-            }
-            Breakpoint::Global(trigger, index) => {
-                println!("{}\twatchpoint\tGlobal\t{}\t{}", i, index, trigger)
-            }
+            Breakpoint::Code(pos) => println!("{}\tbreakpoint\t{}\t{}", i, pos.func_index, pos.instr_index),
+            Breakpoint::Memory(trigger, addr) => println!("{}\twatchpoint\tMemory\t0x{:>08x}\t{}", i, addr, trigger),
+            Breakpoint::Global(trigger, index) => println!("{}\twatchpoint\tGlobal\t{}\t{}", i, index, trigger),
         }
     }
 
@@ -216,12 +187,7 @@ fn cmd_info_imports(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
             External::Function(type_index) => {
                 let func_type = &module.types()[*type_index as usize];
                 // TODO: group functions from the same module
-                println!(
-                    "fn {}.{}{}",
-                    entry.module(),
-                    entry.field(),
-                    &func_type.to_string()[3..]
-                );
+                println!("fn {}.{}{}", entry.module(), entry.field(), &func_type.to_string()[3..]);
             }
             External::Table(table_type) => println!("Table: {:?}", table_type),
             External::Memory(memory_type) => println!("Memory: {:?}", memory_type),
@@ -249,7 +215,7 @@ fn cmd_info_tables(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
         println!(
             "Table {:>2}: {:?}, Length: {}",
             i,
-            table.elem_type(),
+            table.element_type(),
             table.limits().initial()
         );
     }
@@ -267,11 +233,7 @@ fn cmd_info_memory(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
                 max * PAGE_SIZE
             );
         } else {
-            println!(
-                "Memory {:>2}: Min. 0x{:x} bytes",
-                i,
-                limits.initial() * PAGE_SIZE
-            );
+            println!("Memory {:>2}: Min. 0x{:x} bytes", i, limits.initial() * PAGE_SIZE);
         }
     }
     Ok(())
@@ -279,7 +241,22 @@ fn cmd_info_memory(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 
 fn cmd_info_globals(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     for (i, global) in dbg.get_file()?.module().globals().iter().enumerate() {
-        println!(" {}: {}", i, global);
+        let const_str = if global.is_mutable() { "mut  " } else { "const" };
+        let init_str = match global.init_expr() {
+            InitExpr::I32Const(val) => format!("{}", val),
+            InitExpr::I64Const(val) => format!("{}", val),
+            InitExpr::F32Const(val) => format!("{}", val),
+            InitExpr::F64Const(val) => format!("{}", val),
+            InitExpr::Global(index) => format!("global {}", index),
+        };
+        println!(
+            " {}: {} {} {:15} = {}",
+            i,
+            const_str,
+            global.value_type(),
+            global.name(),
+            init_str
+        );
     }
     Ok(())
 }
@@ -289,15 +266,19 @@ fn cmd_info_exports(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     print_count(module.exports().len(), "export");
     for entry in module.exports() {
         match entry.internal() {
-            Internal::Function(index) => println!(
-                "Function {}: {}",
-                index,
-                &module.functions()[*index as usize]
-            ),
+            Internal::Function(index) => println!("Function {}: {}", index, &module.functions()[*index as usize]),
             Internal::Table(index) => println!("Table {}", index),
             Internal::Memory(index) => println!("Memory {}", index),
             Internal::Global(index) => {
-                println!("Global {}: {}", index, &module.globals()[*index as usize])
+                let global = &module.globals()[*index as usize];
+                let const_str = if global.is_mutable() { "mut  " } else { "const" };
+                println!(
+                    "Global {}: {} {:15} {}",
+                    index,
+                    const_str,
+                    global.value_type(),
+                    global.name()
+                );
             }
         }
     }
@@ -323,17 +304,18 @@ fn cmd_info_elements(_dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 
 fn cmd_info_data(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
     let module = dbg.get_file()?.module();
-    print_count(module.data_entries().len(), "data initializer");
-    for entry in module.data_entries() {
+    print_count(module.memory_inits().len(), "memory initializer");
+    for entry in module.memory_inits() {
         let offset = match entry.offset() {
-            InitExpr::Const(val) => format!("{}", val.to::<u32>().unwrap()),
+            InitExpr::I32Const(val) => format!("{}", val),
             InitExpr::Global(index) => format!("of global {}", index),
+            _ => unreachable!(), // TODO ??
         };
         println!(
             " -> for memory {} at offset {} for 0x{:x} bytes",
             entry.index(),
             offset,
-            entry.value().len()
+            entry.data().len()
         );
     }
     Ok(())

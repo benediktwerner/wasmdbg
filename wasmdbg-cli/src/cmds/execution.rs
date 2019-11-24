@@ -1,5 +1,4 @@
-use wasmdbg::breakpoints::{Breakpoint, BreakpointTrigger};
-use wasmdbg::value::Value;
+use wasmdbg::{Value,Breakpoint, BreakpointTrigger};
 use wasmdbg::vm::{CodePosition, Trap};
 use wasmdbg::Debugger;
 

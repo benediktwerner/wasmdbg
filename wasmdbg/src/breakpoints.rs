@@ -1,7 +1,8 @@
-use super::vm::CodePosition;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::iter;
+
+use crate::vm::CodePosition;
 
 #[derive(Clone, Copy)]
 pub enum BreakpointTrigger {

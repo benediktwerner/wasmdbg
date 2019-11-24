@@ -1,19 +1,10 @@
-#[macro_use]
-extern crate failure;
-
-use std::cell::{Ref, RefCell};
+use std::cell::Ref;
 use std::rc::Rc;
 
-pub mod breakpoints;
-pub mod nan_preserving_float;
-pub mod value;
-pub mod vm;
-pub mod wasi;
-pub mod wasm;
-use breakpoints::{Breakpoint, Breakpoints};
-use value::Value;
-use vm::{CodePosition, InitError, Memory, Trap, VM};
-use wasm::{LoadError, Module};
+use bwasm::{LoadError, Module};
+
+use crate::vm::{CodePosition, InitError, Memory, Trap, VM};
+use crate::{Breakpoint, Breakpoints, File, Value};
 
 #[derive(Debug, Fail)]
 pub enum DebuggerError {
@@ -23,6 +14,8 @@ pub enum DebuggerError {
     NoFileLoaded,
     #[fail(display = "The binary is not being run")]
     NoRunningInstance,
+    #[fail(display = "No memory present")]
+    NoMemory,
     #[fail(display = "Invalid brekapoint position")]
     InvalidBreakpointPosition,
     #[fail(display = "Invalid global for watchpoint")]
@@ -33,34 +26,14 @@ pub enum DebuggerError {
 
 pub type DebuggerResult<T> = Result<T, DebuggerError>;
 
-pub struct File {
-    file_path: String,
-    module: Rc<Module>,
-    breakpoints: Rc<RefCell<Breakpoints>>,
-}
-
 #[derive(Default)]
 pub struct Debugger {
     file: Option<File>,
     vm: Option<VM>,
 }
 
-impl File {
-    pub fn file_path(&self) -> &String {
-        &self.file_path
-    }
-
-    pub fn module(&self) -> &Module {
-        &self.module
-    }
-
-    pub fn breakpoints(&self) -> Ref<'_, Breakpoints> {
-        self.breakpoints.borrow()
-    }
-}
-
 impl Debugger {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Debugger {
             file: None,
             vm: None,
@@ -78,11 +51,7 @@ impl Debugger {
     pub fn load_file(&mut self, file_path: &str) -> Result<(), LoadError> {
         let module = Module::from_file(file_path)?;
 
-        self.file = Some(File {
-            file_path: file_path.to_owned(),
-            module: Rc::new(module),
-            breakpoints: Rc::new(RefCell::new(Breakpoints::new())),
-        });
+        self.file = Some(File::new(file_path.to_owned(), module));
         self.vm = None;
 
         Ok(())
@@ -102,11 +71,15 @@ impl Debugger {
     }
 
     pub fn memory(&self) -> DebuggerResult<&Memory> {
-        Ok(self.get_vm()?.memory())
+        match self.get_vm()?.default_memory() {
+            Ok(memory) => Ok(memory),
+            Err(Trap::NoMemory) => Err(DebuggerError::NoMemory),
+            Err(_) => unreachable!(),
+        }
     }
 
     pub fn breakpoints(&self) -> DebuggerResult<Ref<'_, Breakpoints>> {
-        Ok(self.get_file()?.breakpoints())
+        Ok(self.get_file()?.breakpoints().borrow())
     }
 
     pub fn add_breakpoint(&mut self, breakpoint: Breakpoint) -> DebuggerResult<u32> {
@@ -129,19 +102,19 @@ impl Debugger {
                 }
             }
         }
-        Ok(file.breakpoints.borrow_mut().add_breakpoint(breakpoint))
+        Ok(file.breakpoints().borrow_mut().add_breakpoint(breakpoint))
     }
 
     pub fn delete_breakpoint(&mut self, index: u32) -> DebuggerResult<bool> {
         Ok(self
             .get_file()?
-            .breakpoints
+            .breakpoints()
             .borrow_mut()
             .delete_breakpoint(index))
     }
 
     pub fn clear_breakpoints(&mut self) -> DebuggerResult<()> {
-        self.get_file()?.breakpoints.borrow_mut().clear();
+        self.get_file()?.breakpoints().borrow_mut().clear();
         Ok(())
     }
 
@@ -180,8 +153,8 @@ impl Debugger {
 
     fn create_vm(&mut self) -> DebuggerResult<&mut VM> {
         let file = self.file.as_ref().ok_or(DebuggerError::NoFileLoaded)?;
-        let module = file.module.clone();
-        let breakpoints = file.breakpoints.clone();
+        let module = Rc::clone(file.module());
+        let breakpoints = Rc::clone(file.breakpoints());
         self.vm = Some(VM::new(module, breakpoints).map_err(DebuggerError::InitError)?);
         Ok(self.vm.as_mut().unwrap())
     }

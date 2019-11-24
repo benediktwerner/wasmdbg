@@ -2,7 +2,6 @@ use std::convert::{TryFrom, TryInto};
 use std::fmt;
 
 use failure::Error;
-
 use wasmdbg::value::Integer;
 
 use super::format::Format;

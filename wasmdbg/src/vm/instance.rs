@@ -1,112 +1,16 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::nan_preserving_float::{F32, F64};
-use crate::value::{ExtendTo, Integer, LittleEndianConvert, Number, Value, WrapTo};
-use crate::wasm::{
-    Function, InitExpr, Instruction, Module, ResizableLimits, TableType, ValueType, PAGE_SIZE,
-};
-use crate::Breakpoints;
+use bwasm::{Function, Instruction, Module};
+
+use crate::value::{ExtendTo, Integer, LittleEndianConvert, Number, WrapTo};
+use crate::{Breakpoints, Value, F32, F64};
+
+use super::{eval_init_expr, CodePosition, InitError, Memory, Table, TableElement, Trap, VMResult};
 
 pub const VALUE_STACK_LIMIT: usize = 1024 * 1024;
 pub const LABEL_STACK_LIMIT: usize = 64 * 1024;
 pub const FUNCTION_STACK_LIMIT: usize = 1024;
-pub const MEMORY_MAX_PAGES: u32 = 65_536;
-
-#[derive(Debug, Fail)]
-pub enum InitError {
-    #[fail(display = "Initalizer contains global.get which requires imports (unimplemented)")]
-    GlobalGetUnimplemented,
-    #[fail(
-        display = "Initializer type mismatch. Expected \"{}\", found \"{}\"",
-        expected, found
-    )]
-    MismatchedType {
-        expected: ValueType,
-        found: ValueType,
-    },
-    #[fail(
-        display = "Offset expr has invalid type. Expected \"i32\", found \"{}\"",
-        _0
-    )]
-    OffsetInvalidType(ValueType),
-}
-
-#[derive(Clone, Debug, Fail)]
-pub enum Trap {
-    #[fail(display = "Reached unreachable")]
-    ReachedUnreachable,
-    #[fail(display = "Unknown instruction \"{}\"", _0)]
-    UnknownInstruction(Instruction),
-    #[fail(display = "Pop from empty stack")]
-    PopFromEmptyStack,
-    #[fail(display = "Tried to access function frame but there was none")]
-    NoFunctionFrame,
-    #[fail(display = "Execution finished")]
-    ExecutionFinished,
-    #[fail(display = "Type error. Expected \"{}\", found \"{}\"", expected, found)]
-    TypeError {
-        expected: ValueType,
-        found: ValueType,
-    },
-    #[fail(display = "Division by zero")]
-    DivisionByZero,
-    #[fail(display = "Signed integer overflow")]
-    SignedIntegerOverflow,
-    #[fail(display = "Invalid conversion to integer")]
-    InvalidConversionToInt,
-    #[fail(display = "No table present")]
-    NoTable,
-    #[fail(display = "Indirect callee absent (no table or invalid table index)")]
-    IndirectCalleeAbsent,
-    #[fail(display = "Indirect call type mismatch")]
-    IndirectCallTypeMismatch,
-    #[fail(display = "No function with index {}", _0)]
-    NoFunctionWithIndex(u32),
-    #[fail(display = "No start function")]
-    NoStartFunction,
-    #[fail(display = "Reached breakpoint {}", _0)]
-    BreakpointReached(u32),
-    #[fail(display = "Reached watchpoint {}", _0)]
-    WatchpointReached(u32),
-    #[fail(display = "Invalid branch index")]
-    InvalidBranchIndex,
-    #[fail(display = "Out of range memory access at address {:#08x}", _0)]
-    MemoryAccessOutOfRange(u32),
-    #[fail(display = "Tried to call unsupported imported function: {}", _0)]
-    UnsupportedCallToImportedFunction(u32),
-    #[fail(display = "Value stack overflow")]
-    ValueStackOverflow,
-    #[fail(display = "Label stack overflow")]
-    LabelStackOverflow,
-    #[fail(display = "Function stack overflow")]
-    FunctionStackOverflow,
-    #[fail(display = "WASI process exited with exitcode {}", _0)]
-    WasiExit(u32),
-}
-
-pub type VMResult<T> = Result<T, Trap>;
-
-#[derive(Default, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct CodePosition {
-    pub func_index: u32,
-    pub instr_index: u32,
-}
-
-impl CodePosition {
-    pub fn new(func_index: u32, instr_index: u32) -> Self {
-        CodePosition {
-            func_index,
-            instr_index,
-        }
-    }
-}
-
-impl std::fmt::Display for CodePosition {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}:{}", self.func_index, self.instr_index)
-    }
-}
 
 #[derive(Debug)]
 pub enum Label {
@@ -120,150 +24,10 @@ pub struct FunctionFrame {
     pub locals: Vec<Value>,
 }
 
-pub struct Memory {
-    data: Vec<u8>,
-    limits: ResizableLimits,
-}
-
-impl Memory {
-    fn new() -> Memory {
-        Memory {
-            data: Vec::new(),
-            limits: ResizableLimits::new(0, None),
-        }
-    }
-
-    fn from_module(module: &Module) -> Result<Self, InitError> {
-        if let Some(memory) = module.memories().get(0) {
-            let limits = *memory.limits();
-            let mut data = vec![0; (limits.initial() * PAGE_SIZE) as usize];
-
-            for data_segment in module.data_entries() {
-                if data_segment.index() == 0 {
-                    let offset = eval_init_expr(data_segment.offset())?;
-                    let offset = match offset.to::<u32>() {
-                        Some(val) => val as usize,
-                        None => return Err(InitError::OffsetInvalidType(offset.value_type())),
-                    };
-                    let len = data_segment.value().len();
-                    if offset + len > data.len() {
-                        data.resize(offset + len, 0);
-                    }
-                    data[offset..offset + len].copy_from_slice(data_segment.value());
-                }
-            }
-
-            return Ok(Memory { data, limits });
-        }
-        Ok(Self::new())
-    }
-
-    pub fn page_count(&self) -> u32 {
-        (self.data.len() as u32 / PAGE_SIZE)
-    }
-
-    fn grow(&mut self, delta: u32) -> u32 {
-        let page_count = self.page_count();
-        if let Some(max) = self.limits.maximum() {
-            if page_count + delta > max {
-                return -1i32 as u32;
-            }
-        } else if page_count + delta > MEMORY_MAX_PAGES {
-            return -1i32 as u32;
-        }
-        self.data
-            .resize(((page_count + delta) * PAGE_SIZE) as usize, 0);
-        page_count
-    }
-
-    pub fn data(&self) -> &[u8] {
-        &self.data
-    }
-
-    pub fn load<T: LittleEndianConvert>(&self, address: u32) -> VMResult<T> {
-        let size = core::mem::size_of::<T>();
-        let address = address as usize;
-        let bytes = self
-            .data
-            .get(address..address + size)
-            .ok_or_else(|| Trap::MemoryAccessOutOfRange((address + size) as u32))?;
-        Ok(T::from_little_endian(bytes))
-    }
-
-    pub fn store<T: LittleEndianConvert>(&mut self, address: u32, value: T) -> VMResult<()> {
-        let size = core::mem::size_of::<T>();
-        let address = address as usize;
-        let bytes = self
-            .data
-            .get_mut(address..address + size)
-            .ok_or_else(|| Trap::MemoryAccessOutOfRange((address + size) as u32))?;
-        value.to_little_endian(bytes);
-        Ok(())
-    }
-}
-
-#[derive(Clone)]
-pub enum TableElement {
-    Null,
-    Func(u32),
-}
-
-impl Default for TableElement {
-    fn default() -> Self {
-        TableElement::Null
-    }
-}
-
-pub struct Table {
-    elements: Vec<TableElement>,
-}
-
-impl Table {
-    fn new(table_type: TableType) -> Self {
-        let elements = vec![TableElement::Null; table_type.limits().initial() as usize];
-        Table { elements }
-    }
-
-    fn get(&self, index: u32) -> TableElement {
-        self.elements
-            .get(index as usize)
-            .cloned()
-            .unwrap_or_default()
-    }
-
-    fn from_module(module: &Module) -> Result<Option<Table>, InitError> {
-        if let Some(default_table_type) = module.tables().get(0) {
-            let mut table = Table::new(*default_table_type);
-            for entry in module.element_entries() {
-                if entry.index() == 0 {
-                    let offset = eval_init_expr(entry.offset())?;
-                    let offset = match offset.to::<u32>() {
-                        Some(val) => val as usize,
-                        None => return Err(InitError::OffsetInvalidType(offset.value_type())),
-                    };
-                    for (i, val) in entry.members().iter().enumerate() {
-                        table.elements[offset + i] = TableElement::Func(*val);
-                    }
-                }
-            }
-            return Ok(Some(table));
-        }
-        Ok(None)
-    }
-}
-
-fn eval_init_expr(init_expr: &InitExpr) -> Result<Value, InitError> {
-    let val = match init_expr {
-        InitExpr::Const(val) => *val,
-        InitExpr::Global(_) => return Err(InitError::GlobalGetUnimplemented),
-    };
-    Ok(val)
-}
-
 pub struct VM {
     module: Rc<Module>,
-    memory: Memory,
-    table: Option<Table>,
+    memories: Vec<Memory>,
+    tables: Vec<Table>,
     ip: CodePosition,
     globals: Vec<Value>,
     value_stack: Vec<Value>,
@@ -286,13 +50,13 @@ impl VM {
             }
             globals.push(val);
         }
-        let memory = Memory::from_module(&module)?;
-        let table = Table::from_module(&module)?;
+        let memories = Memory::from_module(&module)?;
+        let tables = Table::from_module(&module)?;
 
         Ok(VM {
             module,
-            memory,
-            table,
+            memories,
+            tables,
             ip: CodePosition::default(),
             globals,
             value_stack: Vec::new(),
@@ -323,7 +87,7 @@ impl VM {
         self.trap.as_ref()
     }
 
-    pub fn ip(&self) -> CodePosition {
+    pub const fn ip(&self) -> CodePosition {
         self.ip
     }
 
@@ -335,12 +99,12 @@ impl VM {
         &mut self.globals
     }
 
-    pub fn memory(&self) -> &Memory {
-        &self.memory
+    pub fn memories(&self) -> &[Memory] {
+        &self.memories
     }
 
-    pub fn memory_mut(&mut self) -> &mut Memory {
-        &mut self.memory
+    pub fn memories_mut(&mut self) -> &mut [Memory] {
+        &mut self.memories
     }
 
     pub(crate) fn push(&mut self, val: Value) -> VMResult<()> {
@@ -358,8 +122,8 @@ impl VM {
     pub(crate) fn pop_as<T: Number>(&mut self) -> VMResult<T> {
         let val = self.pop()?;
         val.to::<T>().ok_or_else(|| Trap::TypeError {
-            expected: val.value_type(),
-            found: T::value_type(),
+            expected: T::value_type(),
+            found: val.value_type(),
         })
     }
 
@@ -383,8 +147,16 @@ impl VM {
             .ok_or_else(|| Trap::NoFunctionWithIndex(self.ip.func_index))
     }
 
-    fn default_table(&self) -> VMResult<&Table> {
-        self.table.as_ref().ok_or(Trap::NoTable)
+    pub fn default_memory(&self) -> VMResult<&Memory> {
+        self.memories.get(0).ok_or(Trap::NoMemory)
+    }
+
+    pub fn default_memory_mut(&mut self) -> VMResult<&mut Memory> {
+        self.memories.get_mut(0).ok_or(Trap::NoMemory)
+    }
+
+    pub fn default_table(&self) -> VMResult<&Table> {
+        self.tables.get(0).ok_or(Trap::NoTable)
     }
 
     fn branch(&mut self, mut index: u32) -> VMResult<()> {
@@ -445,7 +217,7 @@ impl VM {
 
     fn perform_load<T: Number + LittleEndianConvert>(&mut self, offset: u32) -> VMResult<()> {
         let address = self.pop_as::<u32>()? + offset;
-        self.push(self.memory.load::<T>(address)?.into())?;
+        self.push(self.default_memory()?.load::<T>(address)?.into())?;
         let size = core::mem::size_of::<T>() as u32;
         if let Some(break_index) = self.breakpoints.borrow().find_memory(address, size, false) {
             return Err(Trap::WatchpointReached(break_index));
@@ -461,7 +233,7 @@ impl VM {
         T: ExtendTo<U>,
     {
         let address = self.pop_as::<u32>()? + offset;
-        let val: T = self.memory.load(address)?;
+        let val: T = self.default_memory()?.load(address)?;
         let val: U = val.extend_to();
         self.push(val.into())?;
         let size = core::mem::size_of::<T>() as u32;
@@ -474,7 +246,7 @@ impl VM {
     fn perform_store<T: Number + LittleEndianConvert>(&mut self, offset: u32) -> VMResult<()> {
         let value = self.pop_as::<T>()?;
         let address = self.pop_as::<u32>()? + offset;
-        self.memory.store(address, value)?;
+        self.default_memory_mut()?.store(address, value)?;
         let size = core::mem::size_of::<T>() as u32;
         if let Some(break_index) = self.breakpoints.borrow().find_memory(address, size, true) {
             return Err(Trap::WatchpointReached(break_index));
@@ -489,7 +261,7 @@ impl VM {
         let value: U = self.pop_as()?;
         let value: T = value.wrap_to();
         let address = self.pop_as::<u32>()? + offset;
-        self.memory.store(address, value)?;
+        self.default_memory_mut()?.store(address, value)?;
         let size = core::mem::size_of::<T>() as u32;
         if let Some(break_index) = self.breakpoints.borrow().find_memory(address, size, true) {
             return Err(Trap::WatchpointReached(break_index));
@@ -653,19 +425,20 @@ impl VM {
     fn execute_step_internal(&mut self) -> VMResult<()> {
         let func = self.module.get_func(self.ip.func_index).unwrap();
         if func.is_imported() {
-            if let Some(wasi_func) = func.wasi_function() {
-                wasi_func.handle(self)?;
-                loop {
-                    if let Some(Label::Return) = self.label_stack.pop() {
-                        if !self.label_stack.is_empty() {
-                            let frame = self.function_stack.pop().unwrap();
-                            self.ip = frame.ret_addr;
-                        }
-                        break;
-                    }
-                }
-                return Ok(());
-            }
+            // TODO
+            // if let Some(wasi_func) = func.wasi_function() {
+            //     wasi_func.handle(self)?;
+            //     loop {
+            //         if let Some(Label::Return) = self.label_stack.pop() {
+            //             if !self.label_stack.is_empty() {
+            //                 let frame = self.function_stack.pop().unwrap();
+            //                 self.ip = frame.ret_addr;
+            //             }
+            //             break;
+            //         }
+            //     }
+            //     return Ok(());
+            // }
             return Err(Trap::UnsupportedCallToImportedFunction(self.ip.func_index));
         }
 
@@ -820,15 +593,17 @@ impl VM {
                 self.perform_store_wrap::<u32, u64>(offset)?
             }
 
-            Instruction::CurrentMemory(_) => self.push(Value::I32(self.memory.page_count()))?,
+            Instruction::CurrentMemory(_) => {
+                self.push(Value::I32(self.default_memory()?.page_count() as i32))?
+            }
             Instruction::GrowMemory(_) => {
                 let delta = self.pop_as::<u32>()?;
-                let result = self.memory.grow(delta);
+                let result = self.default_memory_mut()?.grow(delta);
                 self.push(Value::I32(result))?;
             }
 
-            Instruction::I32Const(val) => self.push(Value::I32(val as u32))?,
-            Instruction::I64Const(val) => self.push(Value::I64(val as u64))?,
+            Instruction::I32Const(val) => self.push(Value::I32(val))?,
+            Instruction::I64Const(val) => self.push(Value::I64(val))?,
             Instruction::F32Const(val) => self.push(Value::F32(F32::from_bits(val)))?,
             Instruction::F64Const(val) => self.push(Value::F64(F64::from_bits(val)))?,
 

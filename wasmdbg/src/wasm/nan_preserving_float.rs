@@ -65,11 +65,11 @@ macro_rules! float {
         impl_binop!($for, $is, Rem, rem);
 
         impl $for {
-            pub fn from_bits(other: $rep) -> Self {
+            pub const fn from_bits(other: $rep) -> Self {
                 $for(other)
             }
 
-            pub fn to_bits(self) -> $rep {
+            pub const fn to_bits(self) -> $rep {
                 self.0
             }
 
@@ -85,7 +85,7 @@ macro_rules! float {
                 self.to_float().is_nan()
             }
 
-            pub fn abs(self) -> Self {
+            pub const fn abs(self) -> Self {
                 $for(self.0 & !$sign_bit)
             }
 
@@ -150,7 +150,7 @@ macro_rules! float {
                 $is::from(self).sqrt().into()
             }
 
-            pub fn copysign(self, other: Self) -> Self {
+            pub const fn copysign(self, other: Self) -> Self {
                 let sign = other.0 & $sign_bit;
                 Self::from_bits((self.0 & !$sign_bit) | sign)
             }

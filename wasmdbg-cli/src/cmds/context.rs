@@ -1,7 +1,6 @@
+use bwasm::Instruction;
 use colored::*;
-
 use wasmdbg::vm::CodePosition;
-use wasmdbg::wasm::Instruction;
 use wasmdbg::Debugger;
 
 use super::{CmdArg, CmdResult, Command, Commands};
