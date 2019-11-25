@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate failure;
-
 mod breakpoints;
 mod debugger;
 mod file;

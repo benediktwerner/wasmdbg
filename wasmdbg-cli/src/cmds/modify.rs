@@ -1,7 +1,6 @@
 use std::convert::TryFrom;
 
 use bwasm::ValueType;
-use failure::Error;
 use wasmdbg::value::Integer;
 use wasmdbg::Debugger;
 
@@ -58,7 +57,7 @@ enum ValType {
 }
 
 impl TryFrom<&str> for ValType {
-    type Error = Error;
+    type Error = anyhow::Error;
     fn try_from(s: &str) -> Result<Self, Self::Error> {
         Ok(match s {
             "i8" => ValType::I8,

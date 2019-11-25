@@ -2,25 +2,26 @@ use std::cell::Ref;
 use std::rc::Rc;
 
 use bwasm::{LoadError, Module};
+use thiserror::Error;
 
 use crate::vm::{CodePosition, InitError, Memory, Trap, VM};
 use crate::{Breakpoint, Breakpoints, File, Value};
 
-#[derive(Debug, Fail)]
+#[derive(Error, Clone, Debug)]
 pub enum DebuggerError {
-    #[fail(display = "Failed to initialize wasm instance: {}", _0)]
-    InitError(#[fail(cause)] InitError),
-    #[fail(display = "No binary file loaded")]
+    #[error("Failed to initialize wasm instance: {0}")]
+    InitError(#[from] InitError),
+    #[error("No binary file loaded")]
     NoFileLoaded,
-    #[fail(display = "The binary is not being run")]
+    #[error("The binary is not being run")]
     NoRunningInstance,
-    #[fail(display = "No memory present")]
+    #[error("No memory present")]
     NoMemory,
-    #[fail(display = "Invalid brekapoint position")]
+    #[error("Invalid brekapoint position")]
     InvalidBreakpointPosition,
-    #[fail(display = "Invalid global for watchpoint")]
+    #[error("Invalid global for watchpoint")]
     InvalidWatchpointGlobal,
-    #[fail(display = "This feature is still unimplemented")]
+    #[error("This feature is still unimplemented")]
     Unimplemented,
 }
 

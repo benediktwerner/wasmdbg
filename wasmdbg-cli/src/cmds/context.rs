@@ -277,7 +277,7 @@ fn print_disassembly(dbg: &Debugger, start: CodePosition, len: Option<u32>) -> C
     Ok(())
 }
 
-fn format_instr(dbg: &Debugger, instr: &Instruction) -> Result<String, failure::Error> {
+fn format_instr(dbg: &Debugger, instr: &Instruction) -> anyhow::Result<String> {
     let result = match instr {
         Instruction::Call(index) => format!(
             "{} <{}>",

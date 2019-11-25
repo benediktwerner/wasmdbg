@@ -1,7 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 
-use failure::Error;
 use wasmdbg::value::Integer;
 
 use super::format::Format;
@@ -100,8 +99,8 @@ impl From<&'static str> for CmdArgType {
 }
 
 pub trait ParseCmdArg {
-    fn parse<'a>(&self, line: &'a str) -> Result<(&'a str, Vec<CmdArg>), Error>;
-    fn parse_all(&self, line: &str) -> Result<Vec<CmdArg>, Error> {
+    fn parse<'a>(&self, line: &'a str) -> anyhow::Result<(&'a str, Vec<CmdArg>)>;
+    fn parse_all(&self, line: &str) -> anyhow::Result<Vec<CmdArg>> {
         match self.parse(line) {
             Ok(("", arg)) => Ok(arg),
             Ok(_) => bail!("Too many arguments."),
@@ -172,7 +171,7 @@ impl ParseCmdArg for CmdArgType {
 }
 
 impl ParseCmdArg for Vec<CmdArgType> {
-    fn parse<'a>(&self, mut line: &'a str) -> Result<(&'a str, Vec<CmdArg>), Error> {
+    fn parse<'a>(&self, mut line: &'a str) -> anyhow::Result<(&'a str, Vec<CmdArg>)> {
         let mut result = Vec::new();
         for arg_type in self {
             match arg_type.parse(line) {
@@ -192,15 +191,15 @@ impl ParseCmdArg for Vec<CmdArgType> {
     }
 }
 
-fn wrap<'a, F>(arg: Result<(&'a str, &str), Error>, f: F) -> Result<(&'a str, Vec<CmdArg>), Error>
+fn wrap<'a, F>(arg: anyhow::Result<(&'a str, &str)>, f: F) -> anyhow::Result<(&'a str, Vec<CmdArg>)>
 where
-    F: Fn(&str) -> Result<CmdArg, Error>,
+    F: Fn(&str) -> anyhow::Result<CmdArg>,
 {
     let (rest, arg) = arg?;
     Ok((rest, vec![f(arg)?]))
 }
 
-fn next_arg(line: &str) -> Result<(&str, &str), Error> {
+fn next_arg(line: &str) -> anyhow::Result<(&str, &str)> {
     let mut iter = line.trim_start().splitn(2, char::is_whitespace);
     if let Some(arg) = iter.next() {
         if let Some(rest) = iter.next() {
@@ -212,7 +211,7 @@ fn next_arg(line: &str) -> Result<(&str, &str), Error> {
     bail!("Missig argument(s)")
 }
 
-// fn next_arg_escaped(line: &str) -> Result<(&str, &str), Error> {
+// fn next_arg_escaped(line: &str) -> anyhow::Result<(&str, &str)> {
 //     let line = line.trim_start();
 
 //     if line.is_empty() {
@@ -259,7 +258,7 @@ fn next_arg(line: &str) -> Result<(&str, &str), Error> {
 //     Ok((rest, &line[..arg_len]))
 // }
 
-fn parse_format(fmt_str: &str) -> Result<(u32, u32, Format), Error> {
+fn parse_format(fmt_str: &str) -> anyhow::Result<(u32, u32, Format)> {
     let count_str = fmt_str
         .chars()
         .take_while(|c| c.is_numeric())

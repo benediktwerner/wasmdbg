@@ -2,8 +2,6 @@ use std::fs::File;
 use std::io::{self, BufRead};
 use std::sync::Arc;
 
-use failure::Error;
-
 use wasmdbg::Debugger;
 
 mod context;
@@ -18,7 +16,7 @@ mod utils;
 use format::Format;
 use parse::{parse_types, ParseCmdArg};
 
-type CmdResult = Result<(), Error>;
+type CmdResult = anyhow::Result<()>;
 
 pub enum CmdArg {
     Str(String),

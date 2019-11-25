@@ -1,4 +1,5 @@
 use bwasm::{InitExpr, ValueType};
+use thiserror::Error;
 
 use crate::Value;
 
@@ -10,77 +11,63 @@ pub use instance::*;
 pub use memory::*;
 pub use table::*;
 
-#[derive(Clone, Debug, Fail)]
+#[derive(Error, Clone, Debug)]
 pub enum InitError {
-    #[fail(display = "Initalizer contains global.get which requires imports (unimplemented)")]
+    #[error("Initalizer contains global.get which requires imports (unimplemented)")]
     GlobalGetUnimplemented,
-    #[fail(
-        display = "Initializer type mismatch. Expected \"{}\", found \"{}\"",
-        expected, found
-    )]
-    MismatchedType {
-        expected: ValueType,
-        found: ValueType,
-    },
-    #[fail(
-        display = "Offset expr has invalid type. Expected \"i32\", found \"{}\"",
-        _0
-    )]
+    #[error("Initializer type mismatch. Expected \"{expected}\", found \"{found}\"")]
+    MismatchedType { expected: ValueType, found: ValueType },
+    #[error("Offset expr has invalid type. Expected \"i32\", found \"{0}\"")]
     OffsetInvalidType(ValueType),
 }
 
-#[derive(Clone, Debug, Fail)]
+#[derive(Error, Clone, Debug)]
 pub enum Trap {
-    #[fail(display = "Reached unreachable")]
+    #[error("Reached unreachable")]
     ReachedUnreachable,
-    // #[fail(display = "Unknown instruction \"{}\"", _0)]
-    // UnknownInstruction(Instruction),
-    #[fail(display = "Pop from empty stack")]
+    #[error("Pop from empty stack")]
     PopFromEmptyStack,
-    #[fail(display = "Tried to access function frame but there was none")]
+    #[error("Tried to access function frame but there was none")]
     NoFunctionFrame,
-    #[fail(display = "Execution finished")]
+    #[error("Execution finished")]
     ExecutionFinished,
-    #[fail(display = "Type error. Expected \"{}\", found \"{}\"", expected, found)]
-    TypeError {
-        expected: ValueType,
-        found: ValueType,
-    },
-    #[fail(display = "Division by zero")]
+    #[error("Type error. Expected \"{expected}\", found \"{found}\"")]
+    TypeError { expected: ValueType, found: ValueType },
+    #[error("Division by zero")]
     DivisionByZero,
-    #[fail(display = "Signed integer overflow")]
+    #[error("Signed integer overflow")]
     SignedIntegerOverflow,
-    #[fail(display = "Invalid conversion to integer")]
+    #[error("Invalid conversion to integer")]
     InvalidConversionToInt,
-    #[fail(display = "No table present")]
+    #[error("No table present")]
     NoTable,
-    #[fail(display = "No memory present")]
+    #[error("No memory present")]
     NoMemory,
-    #[fail(display = "Indirect callee absent (no table or invalid table index)")]
+    #[error("Indirect callee absent (no table or invalid table index)")]
     IndirectCalleeAbsent,
-    #[fail(display = "Indirect call type mismatch")]
+    #[error("Indirect call type mismatch")]
     IndirectCallTypeMismatch,
-    #[fail(display = "No function with index {}", _0)]
+    #[error("No function with index {0}")]
     NoFunctionWithIndex(u32),
-    #[fail(display = "No start function")]
+    #[error("No start function")]
     NoStartFunction,
-    #[fail(display = "Reached breakpoint {}", _0)]
+    #[error("Reached breakpoint {0}")]
     BreakpointReached(u32),
-    #[fail(display = "Reached watchpoint {}", _0)]
+    #[error("Reached watchpoint {0}")]
     WatchpointReached(u32),
-    #[fail(display = "Invalid branch index")]
+    #[error("Invalid branch index")]
     InvalidBranchIndex,
-    #[fail(display = "Out of range memory access at address {:#08x}", _0)]
+    #[error("Out of range memory access at address {0:#08x}")]
     MemoryAccessOutOfRange(u32),
-    #[fail(display = "Tried to call unsupported imported function: {}", _0)]
+    #[error("Tried to call unsupported imported function: {0}")]
     UnsupportedCallToImportedFunction(u32),
-    #[fail(display = "Value stack overflow")]
+    #[error("Value stack overflow")]
     ValueStackOverflow,
-    #[fail(display = "Label stack overflow")]
+    #[error("Label stack overflow")]
     LabelStackOverflow,
-    #[fail(display = "Function stack overflow")]
+    #[error("Function stack overflow")]
     FunctionStackOverflow,
-    #[fail(display = "WASI process exited with exitcode {}", _0)]
+    #[error("WASI process exited with exitcode {0}")]
     WasiExit(u32),
 }
 
