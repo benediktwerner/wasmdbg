@@ -251,12 +251,12 @@ impl Command {
         self
     }
 
-    pub fn requires_file(mut self) -> Self {
+    pub const fn requires_file(mut self) -> Self {
         self.requires_file = true;
         self
     }
 
-    pub fn requires_running(mut self) -> Self {
+    pub const fn requires_running(mut self) -> Self {
         self.requires_running = true;
         self.requires_file()
     }
@@ -267,7 +267,7 @@ pub struct Commands {
 }
 
 impl Commands {
-    fn new() -> Commands {
+    const fn new() -> Commands {
         Commands {
             commands: Vec::new(),
         }

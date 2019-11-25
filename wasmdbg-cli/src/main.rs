@@ -25,7 +25,7 @@ fn main() {
 
     let mut dbg = Debugger::new();
     let cmds = Arc::new(Commands::all());
-    let mut rl = Readline::new(cmds.clone());
+    let mut rl = Readline::new(Arc::clone(&cmds));
     let mut cmd_handler = CommandHandler::new(cmds);
 
     if let Some(file_path) = matches.value_of("file") {

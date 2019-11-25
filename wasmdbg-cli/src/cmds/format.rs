@@ -73,7 +73,7 @@ const HEX_CHARS: [char; 16] = [
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
 ];
 
-fn hex_char(b: u8) -> char {
+const fn hex_char(b: u8) -> char {
     HEX_CHARS[b as usize]
 }
 
