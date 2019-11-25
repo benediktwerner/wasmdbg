@@ -106,11 +106,7 @@ impl Breakpoints {
     }
 
     pub fn find_memory(&self, start: u32, len: u32, write: bool) -> Option<u32> {
-        let watchpoints = if write {
-            &self.memory_write
-        } else {
-            &self.memory_read
-        };
+        let watchpoints = if write { &self.memory_write } else { &self.memory_read };
         for &addr in watchpoints {
             if start <= addr && addr < start + len {
                 for (index, breakpoint) in self {

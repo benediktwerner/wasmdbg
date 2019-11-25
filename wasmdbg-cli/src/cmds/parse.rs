@@ -110,11 +110,9 @@ pub trait ParseCmdArg {
 }
 
 impl ParseCmdArg for CmdArgType {
-    fn parse<'a>(&self, line: &'a str) -> Result<(&'a str, Vec<CmdArg>), Error> {
+    fn parse<'a>(&self, line: &'a str) -> anyhow::Result<(&'a str, Vec<CmdArg>)> {
         match self {
-            CmdArgType::Str(_) | CmdArgType::Path(_) => {
-                wrap(next_arg(line), |a| Ok(CmdArg::Str(a.to_string())))
-            }
+            CmdArgType::Str(_) | CmdArgType::Path(_) => wrap(next_arg(line), |a| Ok(CmdArg::Str(a.to_string()))),
             CmdArgType::Line(_) => Ok(("", vec![CmdArg::Str(line.to_string())])),
             CmdArgType::Fmt(_) => {
                 if let Some('/') = line.trim_start().chars().next() {
@@ -128,9 +126,7 @@ impl ParseCmdArg for CmdArgType {
             }
             CmdArgType::Usize(_) => wrap(next_arg(line), |a| Ok(CmdArg::Usize(a.parse()?))),
             CmdArgType::U32(_) => wrap(next_arg(line), |a| Ok(CmdArg::U32(a.parse()?))),
-            CmdArgType::Addr(_) => wrap(next_arg(line), |a| {
-                Ok(CmdArg::U32(u32::from_str_with_radix(a)?))
-            }),
+            CmdArgType::Addr(_) => wrap(next_arg(line), |a| Ok(CmdArg::U32(u32::from_str_with_radix(a)?))),
             CmdArgType::Const(val) => {
                 if line.trim_start().starts_with(*val) {
                     Ok((&line[val.len()..], vec![CmdArg::Const(val)]))
@@ -259,15 +255,8 @@ fn next_arg(line: &str) -> anyhow::Result<(&str, &str)> {
 // }
 
 fn parse_format(fmt_str: &str) -> anyhow::Result<(u32, u32, Format)> {
-    let count_str = fmt_str
-        .chars()
-        .take_while(|c| c.is_numeric())
-        .collect::<String>();
-    let count = if count_str.is_empty() {
-        1
-    } else {
-        count_str.parse()?
-    };
+    let count_str = fmt_str.chars().take_while(|c| c.is_numeric()).collect::<String>();
+    let count = if count_str.is_empty() { 1 } else { count_str.parse()? };
     let mut size = 4;
     let mut format = Format::Hex;
     for c in fmt_str.chars().skip_while(|c| c.is_numeric()) {

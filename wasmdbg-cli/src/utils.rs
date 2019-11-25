@@ -10,10 +10,7 @@ pub fn terminal_width() -> usize {
 
 pub fn print_header(text: &str) {
     let line_length = terminal_width() - text.len() - 8;
-    println!(
-        "{}",
-        format!("──[ {} ]──{:─<2$}", text, "", line_length).blue()
-    )
+    println!("{}", format!("──[ {} ]──{:─<2$}", text, "", line_length).blue())
 }
 
 pub fn print_line() {

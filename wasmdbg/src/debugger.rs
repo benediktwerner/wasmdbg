@@ -35,10 +35,7 @@ pub struct Debugger {
 
 impl Debugger {
     pub const fn new() -> Self {
-        Debugger {
-            file: None,
-            vm: None,
-        }
+        Debugger { file: None, vm: None }
     }
 
     pub fn file(&self) -> Option<&File> {
@@ -107,11 +104,7 @@ impl Debugger {
     }
 
     pub fn delete_breakpoint(&mut self, index: u32) -> DebuggerResult<bool> {
-        Ok(self
-            .get_file()?
-            .breakpoints()
-            .borrow_mut()
-            .delete_breakpoint(index))
+        Ok(self.get_file()?.breakpoints().borrow_mut().delete_breakpoint(index))
     }
 
     pub fn clear_breakpoints(&mut self) -> DebuggerResult<()> {

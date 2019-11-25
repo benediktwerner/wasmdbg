@@ -41,40 +41,28 @@ impl CmdArg {
         match self {
             CmdArg::Str(val) => val.to_string(),
             CmdArg::Const(val) => val.to_string(),
-            _ => panic!(
-                "Parsed arg has wrong type. Expected str, found {}",
-                self.type_str()
-            ),
+            _ => panic!("Parsed arg has wrong type. Expected str, found {}", self.type_str()),
         }
     }
 
     fn as_const(&self) -> &'static str {
         match self {
             CmdArg::Const(val) => val,
-            _ => panic!(
-                "Parsed arg has wrong type. Expected const, found {}",
-                self.type_str()
-            ),
+            _ => panic!("Parsed arg has wrong type. Expected const, found {}", self.type_str()),
         }
     }
 
     fn as_u32(&self) -> u32 {
         match self {
             CmdArg::U32(val) => *val,
-            _ => panic!(
-                "Parsed arg has wrong type. Expected u32, found {}",
-                self.type_str()
-            ),
+            _ => panic!("Parsed arg has wrong type. Expected u32, found {}", self.type_str()),
         }
     }
 
     fn as_usize(&self) -> usize {
         match self {
             CmdArg::Usize(val) => *val,
-            _ => panic!(
-                "Parsed arg has wrong type. Expected usize, found {}",
-                self.type_str()
-            ),
+            _ => panic!("Parsed arg has wrong type. Expected usize, found {}", self.type_str()),
         }
     }
 }
@@ -266,9 +254,7 @@ pub struct Commands {
 
 impl Commands {
     const fn new() -> Commands {
-        Commands {
-            commands: Vec::new(),
-        }
+        Commands { commands: Vec::new() }
     }
 
     pub fn all() -> Commands {
@@ -416,9 +402,7 @@ impl CommandHandler {
                 }
                 println!(
                     "\n{}",
-                    cmd.help
-                        .or(cmd.description)
-                        .unwrap_or("No help for this command")
+                    cmd.help.or(cmd.description).unwrap_or("No help for this command")
                 );
             }
             None => println!("Unknown command: \"{}\". Try \"help\".", cmd_name),

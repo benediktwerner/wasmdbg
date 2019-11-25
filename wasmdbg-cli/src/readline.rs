@@ -15,10 +15,7 @@ fn get_history_file() -> String {
 
 fn find_cmds<'a>(cmds: &'a Commands, prefix: &str) -> Vec<&'a Command> {
     cmds.iter()
-        .filter(|cmd| {
-            cmd.name.starts_with(prefix)
-                || cmd.aliases.iter().any(|&alias| alias.starts_with(prefix))
-        })
+        .filter(|cmd| cmd.name.starts_with(prefix) || cmd.aliases.iter().any(|&alias| alias.starts_with(prefix)))
         .collect()
 }
 
@@ -40,11 +37,7 @@ impl<Term: Terminal> Completer<Term> for MyCompleter {
     }
 }
 
-fn complete<'a, I>(
-    cmds: &Commands,
-    curr_word: &'a str,
-    other_words: &mut I,
-) -> Option<Vec<Completion>>
+fn complete<'a, I>(cmds: &Commands, curr_word: &'a str, other_words: &mut I) -> Option<Vec<Completion>>
 where
     I: Iterator<Item = &'a str> + Clone,
 {
@@ -175,9 +168,7 @@ impl Readline {
     pub fn new(cmds: Arc<Commands>) -> Self {
         let interface = Interface::new("wasmdbg").unwrap();
         interface.set_completer(Arc::new(MyCompleter { cmds }));
-        interface
-            .set_prompt(&"wasmdbg> ".red().to_string())
-            .unwrap();
+        interface.set_prompt(&"wasmdbg> ".red().to_string()).unwrap();
 
         if let Err(error) = interface.load_history(get_history_file()) {
             if error.kind() != io::ErrorKind::NotFound {

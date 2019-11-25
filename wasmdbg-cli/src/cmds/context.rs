@@ -97,22 +97,13 @@ fn cmd_nearpc(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
         None => (DISASSEMBLY_DEFAULT_MAX_LINES, 2),
     };
     let ip = dbg.get_vm()?.ip();
-    let code = dbg
-        .get_file()?
-        .module()
-        .get_func(ip.func_index)
-        .unwrap()
-        .instructions();
+    let code = dbg.get_file()?.module().get_func(ip.func_index).unwrap().instructions();
     if forward + back >= code.len() as u32 {
         print_disassembly(dbg, CodePosition::new(ip.func_index, 0), None)
     } else {
         let start = ip.instr_index - back.min(ip.instr_index);
         let end = (ip.instr_index + forward).min(code.len() as u32);
-        print_disassembly(
-            dbg,
-            CodePosition::new(ip.func_index, start),
-            Some(end - start),
-        )
+        print_disassembly(dbg, CodePosition::new(ip.func_index, start), Some(end - start))
     }
 }
 
@@ -183,18 +174,8 @@ fn cmd_globals(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
         println!("<no locals>");
     } else {
         let max_index_len = globals.len().to_string().len();
-        for (i, (val, global)) in globals
-            .iter()
-            .zip(dbg.get_file()?.module().globals())
-            .enumerate()
-        {
-            println!(
-                "Global {:>3$}: {:15} : {}",
-                i,
-                global.name(),
-                val,
-                max_index_len
-            );
+        for (i, (val, global)) in globals.iter().zip(dbg.get_file()?.module().globals()).enumerate() {
+            println!("Global {:>3$}: {:15} : {}", i, global.name(), val, max_index_len);
         }
     }
     Ok(())
@@ -214,10 +195,7 @@ fn print_disassembly(dbg: &Debugger, start: CodePosition, len: Option<u32>) -> C
     });
     let code = match dbg.get_file()?.module().get_func(start.func_index) {
         Some(func) => {
-            ensure!(
-                !func.is_imported(),
-                "Cannot show disassembly of imported function"
-            );
+            ensure!(!func.is_imported(), "Cannot show disassembly of imported function");
             let start = start.instr_index as usize;
             if let Some(len) = len {
                 let end = start + len as usize;
@@ -235,9 +213,7 @@ fn print_disassembly(dbg: &Debugger, start: CodePosition, len: Option<u32>) -> C
         let instr_index = start.instr_index + i as u32;
         let addr_str = format!("{}:{:>02$}", start.func_index, instr_index, max_index_len);
         let breakpoint = match breakpoints {
-            Some(ref breakpoints) => {
-                breakpoints.find_code(CodePosition::new(start.func_index, instr_index))
-            }
+            Some(ref breakpoints) => breakpoints.find_code(CodePosition::new(start.func_index, instr_index)),
             None => None,
         };
         let breakpoint_str = match breakpoint {
@@ -261,10 +237,7 @@ fn print_disassembly(dbg: &Debugger, start: CodePosition, len: Option<u32>) -> C
                 indent
             );
         } else {
-            println!(
-                "   {}{}   {: >4$}{}",
-                breakpoint_str, addr_str, "", instr_str, indent
-            );
+            println!("   {}{}   {: >4$}{}", breakpoint_str, addr_str, "", instr_str, indent);
         }
         match instr {
             Instruction::Block(_) => indent += 1,

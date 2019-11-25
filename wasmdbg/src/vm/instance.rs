@@ -160,8 +160,7 @@ impl VM {
     }
 
     fn branch(&mut self, mut index: u32) -> VMResult<()> {
-        self.label_stack
-            .truncate(self.label_stack.len() - index as usize);
+        self.label_stack.truncate(self.label_stack.len() - index as usize);
         match self.label_stack.last().unwrap() {
             Label::Bound(target) => self.ip.instr_index = *target,
             Label::Unbound => {
@@ -225,10 +224,7 @@ impl VM {
         Ok(())
     }
 
-    fn perform_load_extend<T: LittleEndianConvert, U: Number>(
-        &mut self,
-        offset: u32,
-    ) -> VMResult<()>
+    fn perform_load_extend<T: LittleEndianConvert, U: Number>(&mut self, offset: u32) -> VMResult<()>
     where
         T: ExtendTo<U>,
     {
@@ -288,10 +284,7 @@ impl VM {
         Ok(())
     }
 
-    fn binop_try<T: Number, R: Number, F: Fn(T, T) -> VMResult<R>>(
-        &mut self,
-        fun: F,
-    ) -> VMResult<()> {
+    fn binop_try<T: Number, R: Number, F: Fn(T, T) -> VMResult<R>>(&mut self, fun: F) -> VMResult<()> {
         let b: T = self.pop_as()?;
         let a: T = self.pop_as()?;
         self.push(fun(a, b)?.into())?;
@@ -473,10 +466,7 @@ impl VM {
             }
             Instruction::BrTable(table_data) => {
                 let index = self.pop_as::<u32>()?;
-                let depth = table_data
-                    .table
-                    .get(index as usize)
-                    .unwrap_or(&table_data.default);
+                let depth = table_data.table.get(index as usize).unwrap_or(&table_data.default);
                 self.branch(*depth)?;
             }
             Instruction::Return => loop {
@@ -556,46 +546,26 @@ impl VM {
             Instruction::F64Load(_flag, offset) => self.perform_load::<F64>(offset)?,
             Instruction::I32Load8S(_flag, offset) => self.perform_load_extend::<i8, u32>(offset)?,
             Instruction::I32Load8U(_flag, offset) => self.perform_load_extend::<u8, u32>(offset)?,
-            Instruction::I32Load16S(_flag, offset) => {
-                self.perform_load_extend::<i16, u32>(offset)?
-            }
-            Instruction::I32Load16U(_flag, offset) => {
-                self.perform_load_extend::<u16, u32>(offset)?
-            }
+            Instruction::I32Load16S(_flag, offset) => self.perform_load_extend::<i16, u32>(offset)?,
+            Instruction::I32Load16U(_flag, offset) => self.perform_load_extend::<u16, u32>(offset)?,
             Instruction::I64Load8S(_flag, offset) => self.perform_load_extend::<i8, u64>(offset)?,
             Instruction::I64Load8U(_flag, offset) => self.perform_load_extend::<u8, u64>(offset)?,
-            Instruction::I64Load16S(_flag, offset) => {
-                self.perform_load_extend::<i16, u64>(offset)?
-            }
-            Instruction::I64Load16U(_flag, offset) => {
-                self.perform_load_extend::<u16, u64>(offset)?
-            }
-            Instruction::I64Load32S(_flag, offset) => {
-                self.perform_load_extend::<i32, u64>(offset)?
-            }
-            Instruction::I64Load32U(_flag, offset) => {
-                self.perform_load_extend::<u32, u64>(offset)?
-            }
+            Instruction::I64Load16S(_flag, offset) => self.perform_load_extend::<i16, u64>(offset)?,
+            Instruction::I64Load16U(_flag, offset) => self.perform_load_extend::<u16, u64>(offset)?,
+            Instruction::I64Load32S(_flag, offset) => self.perform_load_extend::<i32, u64>(offset)?,
+            Instruction::I64Load32U(_flag, offset) => self.perform_load_extend::<u32, u64>(offset)?,
 
             Instruction::I32Store(_flag, offset) => self.perform_store::<u32>(offset)?,
             Instruction::I64Store(_flag, offset) => self.perform_store::<u64>(offset)?,
             Instruction::F32Store(_flag, offset) => self.perform_store::<F32>(offset)?,
             Instruction::F64Store(_flag, offset) => self.perform_store::<F64>(offset)?,
             Instruction::I32Store8(_flag, offset) => self.perform_store_wrap::<u8, u32>(offset)?,
-            Instruction::I32Store16(_flag, offset) => {
-                self.perform_store_wrap::<u16, u32>(offset)?
-            }
+            Instruction::I32Store16(_flag, offset) => self.perform_store_wrap::<u16, u32>(offset)?,
             Instruction::I64Store8(_flag, offset) => self.perform_store_wrap::<u8, u64>(offset)?,
-            Instruction::I64Store16(_flag, offset) => {
-                self.perform_store_wrap::<u16, u64>(offset)?
-            }
-            Instruction::I64Store32(_flag, offset) => {
-                self.perform_store_wrap::<u32, u64>(offset)?
-            }
+            Instruction::I64Store16(_flag, offset) => self.perform_store_wrap::<u16, u64>(offset)?,
+            Instruction::I64Store32(_flag, offset) => self.perform_store_wrap::<u32, u64>(offset)?,
 
-            Instruction::CurrentMemory(_) => {
-                self.push(Value::I32(self.default_memory()?.page_count() as i32))?
-            }
+            Instruction::CurrentMemory(_) => self.push(Value::I32(self.default_memory()?.page_count() as i32))?,
             Instruction::GrowMemory(_) => {
                 let delta = self.pop_as::<u32>()?;
                 let result = self.default_memory_mut()?.grow(delta);
@@ -651,13 +621,9 @@ impl VM {
             Instruction::I32Add => self.binop(|a: u32, b: u32| a.wrapping_add(b))?,
             Instruction::I32Sub => self.binop(|a: u32, b: u32| a.wrapping_sub(b))?,
             Instruction::I32Mul => self.binop(|a: u32, b: u32| a.wrapping_mul(b))?,
-            Instruction::I32DivS => {
-                self.binop_try(|a: u32, b: u32| Ok((a as i32).div(b as i32)? as u32))?
-            }
+            Instruction::I32DivS => self.binop_try(|a: u32, b: u32| Ok((a as i32).div(b as i32)? as u32))?,
             Instruction::I32DivU => self.binop_try(|a: u32, b: u32| a.div(b))?,
-            Instruction::I32RemS => {
-                self.binop_try(|a: u32, b: u32| Ok((a as i32).rem(b as i32)? as u32))?
-            }
+            Instruction::I32RemS => self.binop_try(|a: u32, b: u32| Ok((a as i32).rem(b as i32)? as u32))?,
             Instruction::I32RemU => self.binop_try(|a: u32, b: u32| a.rem(b))?,
             Instruction::I32And => self.binop(|a: u32, b: u32| a & b)?,
             Instruction::I32Or => self.binop(|a: u32, b: u32| a | b)?,
@@ -674,13 +640,9 @@ impl VM {
             Instruction::I64Add => self.binop(|a: u64, b: u64| a.wrapping_add(b))?,
             Instruction::I64Sub => self.binop(|a: u64, b: u64| a.wrapping_sub(b))?,
             Instruction::I64Mul => self.binop(|a: u64, b: u64| a.wrapping_mul(b))?,
-            Instruction::I64DivS => {
-                self.binop_try(|a: u64, b: u64| Ok((a as i64).div(b as i64)? as u64))?
-            }
+            Instruction::I64DivS => self.binop_try(|a: u64, b: u64| Ok((a as i64).div(b as i64)? as u64))?,
             Instruction::I64DivU => self.binop_try(|a: u64, b: u64| a.div(b))?,
-            Instruction::I64RemS => {
-                self.binop_try(|a: u64, b: u64| Ok((a as i64).rem(b as i64)? as u64))?
-            }
+            Instruction::I64RemS => self.binop_try(|a: u64, b: u64| Ok((a as i64).rem(b as i64)? as u64))?,
             Instruction::I64RemU => self.binop_try(|a: u64, b: u64| a.rem(b))?,
             Instruction::I64And => self.binop(|a: u64, b: u64| a & b)?,
             Instruction::I64Or => self.binop(|a: u64, b: u64| a | b)?,
@@ -722,29 +684,29 @@ impl VM {
             Instruction::F64Copysign => self.binop(|a: F64, b: F64| a.copysign(b))?,
 
             Instruction::I32WrapI64 => self.unop(|x: u64| x as u32)?,
-            Instruction::I32TruncSF32 => self.unop_try(|x: F32| {
-                Ok(x.trunc_to_i32().ok_or(Trap::InvalidConversionToInt)? as u32)
-            })?,
+            Instruction::I32TruncSF32 => {
+                self.unop_try(|x: F32| Ok(x.trunc_to_i32().ok_or(Trap::InvalidConversionToInt)? as u32))?
+            }
             Instruction::I32TruncUF32 => {
                 self.unop_try(|x: F32| x.trunc_to_u32().ok_or(Trap::InvalidConversionToInt))?
             }
-            Instruction::I32TruncSF64 => self.unop_try(|x: F64| {
-                Ok(x.trunc_to_i32().ok_or(Trap::InvalidConversionToInt)? as u32)
-            })?,
+            Instruction::I32TruncSF64 => {
+                self.unop_try(|x: F64| Ok(x.trunc_to_i32().ok_or(Trap::InvalidConversionToInt)? as u32))?
+            }
             Instruction::I32TruncUF64 => {
                 self.unop_try(|x: F64| x.trunc_to_u32().ok_or(Trap::InvalidConversionToInt))?
             }
             Instruction::I64ExtendSI32 => self.unop(|x: u32| -> u64 { (x as i32).extend_to() })?,
             Instruction::I64ExtendUI32 => self.unop(|x: u32| -> u64 { x.extend_to() })?,
-            Instruction::I64TruncSF32 => self.unop_try(|x: F32| {
-                Ok(x.trunc_to_i64().ok_or(Trap::InvalidConversionToInt)? as u64)
-            })?,
+            Instruction::I64TruncSF32 => {
+                self.unop_try(|x: F32| Ok(x.trunc_to_i64().ok_or(Trap::InvalidConversionToInt)? as u64))?
+            }
             Instruction::I64TruncUF32 => {
                 self.unop_try(|x: F32| x.trunc_to_u64().ok_or(Trap::InvalidConversionToInt))?
             }
-            Instruction::I64TruncSF64 => self.unop_try(|x: F64| {
-                Ok(x.trunc_to_i64().ok_or(Trap::InvalidConversionToInt)? as u64)
-            })?,
+            Instruction::I64TruncSF64 => {
+                self.unop_try(|x: F64| Ok(x.trunc_to_i64().ok_or(Trap::InvalidConversionToInt)? as u64))?
+            }
             Instruction::I64TruncUF64 => {
                 self.unop_try(|x: F64| x.trunc_to_u64().ok_or(Trap::InvalidConversionToInt))?
             }

@@ -1,6 +1,6 @@
-use wasmdbg::{Value,Breakpoint, BreakpointTrigger};
 use wasmdbg::vm::{CodePosition, Trap};
 use wasmdbg::Debugger;
+use wasmdbg::{Breakpoint, BreakpointTrigger, Value};
 
 use super::context;
 use super::{CmdArg, CmdArgOptionExt, CmdResult, Command, Commands};
@@ -33,12 +33,22 @@ pub fn add_cmds(commands: &mut Commands) {
             .requires_file()
         );
     commands.add(
-            Command::new_subcommand("watch")
+        Command::new_subcommand("watch")
             .description("Set a watchpoint")
             .requires_file()
-            .add_subcommand(Command::new("memory", cmd_watch_memory).takes_args("ADDR:addr [read|write]").description("Watch a memory location").help("Watch the memory at address ADDR and pause execution when it's value is read/written."))
-            .add_subcommand(Command::new("global", cmd_watch_global).takes_args("INDEX:u32 [read|write]").description("Watch a global").help("Watch the global with index INDEX and pause execution when it's value is read/written."))
-        );
+            .add_subcommand(
+                Command::new("memory", cmd_watch_memory)
+                    .takes_args("ADDR:addr [read|write]")
+                    .description("Watch a memory location")
+                    .help("Watch the memory at address ADDR and pause execution when it's value is read/written."),
+            )
+            .add_subcommand(
+                Command::new("global", cmd_watch_global)
+                    .takes_args("INDEX:u32 [read|write]")
+                    .description("Watch a global")
+                    .help("Watch the global with index INDEX and pause execution when it's value is read/written."),
+            ),
+    );
     commands.add(
         Command::new("delete", cmd_delete)
             .description("Delete a breakpoint")
@@ -115,11 +125,7 @@ fn cmd_call(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
         if let Some(arg_parsed) = Value::from_str(&arg.as_string(), *value_type) {
             args_parsed.push(arg_parsed);
         } else {
-            bail!(
-                "Failed to parse argument \"{}\" as {}",
-                arg.as_string(),
-                value_type
-            );
+            bail!("Failed to parse argument \"{}\" as {}", arg.as_string(), value_type);
         }
     }
 

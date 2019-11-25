@@ -25,10 +25,7 @@ impl Table {
     }
 
     pub fn get(&self, index: u32) -> TableElement {
-        self.elements
-            .get(index as usize)
-            .copied()
-            .unwrap_or_default()
+        self.elements.get(index as usize).copied().unwrap_or_default()
     }
 
     pub fn from_module(module: &bwasm::Module) -> Result<Vec<Table>, InitError> {

@@ -51,8 +51,7 @@ impl Memory {
         } else if page_count + delta > MEMORY_MAX_PAGES {
             return -1i32;
         }
-        self.data
-            .resize(((page_count + delta) * PAGE_SIZE) as usize, 0);
+        self.data.resize(((page_count + delta) * PAGE_SIZE) as usize, 0);
         page_count as i32
     }
 

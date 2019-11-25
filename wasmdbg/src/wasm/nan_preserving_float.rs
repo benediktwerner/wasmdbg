@@ -36,10 +36,7 @@ macro_rules! impl_binop {
             type Output = Self;
 
             fn $func_name(self, other: T) -> Self {
-                $for(
-                    $op::$func_name($is::from_bits(self.0), $is::from_bits(other.into().0))
-                        .to_bits(),
-                )
+                $for($op::$func_name($is::from_bits(self.0), $is::from_bits(other.into().0)).to_bits())
             }
         }
     };
@@ -47,12 +44,7 @@ macro_rules! impl_binop {
 
 macro_rules! float {
     ($for:ident, $rep:ident, $is:ident) => {
-        float!(
-            $for,
-            $rep,
-            $is,
-            1 << (::core::mem::size_of::<$is>() * 8 - 1)
-        );
+        float!($for, $rep, $is, 1 << (::core::mem::size_of::<$is>() * 8 - 1));
     };
     ($for:ident, $rep:ident, $is:ident, $sign_bit:expr) => {
         #[derive(Copy, Clone)]
@@ -158,10 +150,7 @@ macro_rules! float {
             #[allow(clippy::cast_lossless)]
             pub fn trunc_to_i32(self) -> Option<i32> {
                 let self_float = self.to_float();
-                if self.is_nan()
-                    || self_float >= -(i32::min_value() as $is)
-                    || self_float < i32::min_value() as $is
-                {
+                if self.is_nan() || self_float >= -(i32::min_value() as $is) || self_float < i32::min_value() as $is {
                     None
                 } else {
                     Some(self_float.trunc() as i32)
@@ -170,10 +159,7 @@ macro_rules! float {
 
             pub fn trunc_to_i64(self) -> Option<i64> {
                 let self_float = self.to_float();
-                if self.is_nan()
-                    || self_float >= -(i64::min_value() as $is)
-                    || self_float < i64::min_value() as $is
-                {
+                if self.is_nan() || self_float >= -(i64::min_value() as $is) || self_float < i64::min_value() as $is {
                     None
                 } else {
                     Some(self_float.trunc() as i64)
@@ -183,10 +169,7 @@ macro_rules! float {
             #[allow(clippy::cast_lossless)]
             pub fn trunc_to_u32(self) -> Option<u32> {
                 let self_float = self.to_float();
-                if self.is_nan()
-                    || self_float >= -(u32::min_value() as $is) * 2.0
-                    || self_float <= -1.0
-                {
+                if self.is_nan() || self_float >= -(u32::min_value() as $is) * 2.0 || self_float <= -1.0 {
                     None
                 } else {
                     Some(self_float.trunc() as u32)
@@ -195,10 +178,7 @@ macro_rules! float {
 
             pub fn trunc_to_u64(self) -> Option<u64> {
                 let self_float = self.to_float();
-                if self.is_nan()
-                    || self_float >= -(u64::min_value() as $is) * 2.0
-                    || self_float <= -1.0
-                {
+                if self.is_nan() || self_float >= -(u64::min_value() as $is) * 2.0 || self_float <= -1.0 {
                     None
                 } else {
                     Some(self_float.trunc() as u64)
