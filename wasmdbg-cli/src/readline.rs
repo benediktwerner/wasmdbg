@@ -9,8 +9,8 @@ use linefeed::{Interface, Prompter, ReadResult};
 
 use crate::cmds::{CmdArgType, Command, Commands};
 
-lazy_static! {
-    static ref HISTORY_FILE_PATH: String = shellexpand::tilde("~/.wasmdbg_history").to_string();
+fn get_history_file() -> String {
+    shellexpand::tilde("~/.wasmdbg_history").to_string()
 }
 
 fn find_cmds<'a>(cmds: &'a Commands, prefix: &str) -> Vec<&'a Command> {
@@ -179,7 +179,7 @@ impl Readline {
             .set_prompt(&"wasmdbg> ".red().to_string())
             .unwrap();
 
-        if let Err(error) = interface.load_history(&*HISTORY_FILE_PATH) {
+        if let Err(error) = interface.load_history(get_history_file()) {
             if error.kind() != io::ErrorKind::NotFound {
                 println!("Error while loading command history: {:?}", error);
             }
@@ -212,7 +212,7 @@ impl Readline {
 
 impl Drop for Readline {
     fn drop(&mut self) {
-        if let Err(error) = self.interface.save_history(&*HISTORY_FILE_PATH) {
+        if let Err(error) = self.interface.save_history(get_history_file()) {
             println!("Error while saving command history: {}", error);
         }
     }
