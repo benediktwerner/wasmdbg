@@ -215,7 +215,7 @@ fn cmd_info_tables(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
         println!(
             "Table {:>2}: {:?}, Length: {}",
             i,
-            table.element_type(),
+            table.elem_type(),
             table.limits().initial()
         );
     }

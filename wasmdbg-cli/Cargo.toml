@@ -20,7 +20,7 @@ path = "src/main.rs"
 
 [dependencies]
 wasmdbg = { path = "../wasmdbg" }
-bwasm = { path = "../../bwasm" }
+bwasm = "0.1"
 clap = "2.33"
 colored = "1.9"
 linefeed = "0.6"
