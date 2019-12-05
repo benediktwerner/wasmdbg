@@ -1,5 +1,3 @@
-replace failure?
-
 more wasi
 print cmd
 
