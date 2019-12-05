@@ -200,7 +200,7 @@ fn cmd_continue(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
 fn cmd_step(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
     let steps = args.get(0).as_u32_or(1);
     for _ in 0..steps {
-        if let Some(trap) = dbg.single_instruction()? {
+        if let Some(trap) = dbg.execute_step()? {
             return print_run_result(trap, dbg);
         }
     }
@@ -210,7 +210,7 @@ fn cmd_step(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
 fn cmd_next(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
     let steps = args.get(0).as_u32_or(1);
     for _ in 0..steps {
-        if let Some(trap) = dbg.next_instruction()? {
+        if let Some(trap) = dbg.execute_step_over()? {
             return print_run_result(trap, dbg);
         }
     }
@@ -218,7 +218,7 @@ fn cmd_next(dbg: &mut Debugger, args: &[CmdArg]) -> CmdResult {
 }
 
 fn cmd_finish(dbg: &mut Debugger, _args: &[CmdArg]) -> CmdResult {
-    if let Some(trap) = dbg.execute_until_return()? {
+    if let Some(trap) = dbg.execute_step_out()? {
         print_run_result(trap, dbg)
     } else {
         context::print_context(dbg)

@@ -133,15 +133,15 @@ impl Debugger {
         Ok(self.get_vm_mut()?.continue_execution())
     }
 
-    pub fn single_instruction(&mut self) -> DebuggerResult<Option<Trap>> {
+    pub fn execute_step(&mut self) -> DebuggerResult<Option<Trap>> {
         Ok(self.get_vm_mut()?.execute_step().err())
     }
 
-    pub fn next_instruction(&mut self) -> DebuggerResult<Option<Trap>> {
+    pub fn execute_step_over(&mut self) -> DebuggerResult<Option<Trap>> {
         Ok(self.get_vm_mut()?.execute_step_over().err())
     }
 
-    pub fn execute_until_return(&mut self) -> DebuggerResult<Option<Trap>> {
+    pub fn execute_step_out(&mut self) -> DebuggerResult<Option<Trap>> {
         Ok(self.get_vm_mut()?.execute_step_out().err())
     }
 
@@ -185,7 +185,7 @@ impl Debugger {
         }
     }
 
-    fn get_file_mut(&mut self) -> DebuggerResult<&mut File> {
+    pub fn get_file_mut(&mut self) -> DebuggerResult<&mut File> {
         if let Some(ref mut file) = self.file {
             Ok(file)
         } else {
