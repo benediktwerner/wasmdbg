@@ -97,6 +97,14 @@ dependencies = [
 [[package]]
 name = "bwasm"
 version = "0.1.0"
+dependencies = [
+ "parity-wasm",
+ "wasmi-validation",
+]
+
+[[package]]
+name = "bwasm"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f50a00e217f4c965320e86b046a873ad9a76eabeb2b409ec445a831e599197a9"
 dependencies = [
@@ -763,7 +771,7 @@ checksum = "b89c3ce4ce14bdc6fb6beaf9ec7928ca331de5df7e5ea278375642a2f478570d"
 name = "wasmdbg"
 version = "0.1.0"
 dependencies = [
- "bwasm",
+ "bwasm 0.1.0",
  "rand 0.7.2",
  "thiserror",
 ]
@@ -773,7 +781,7 @@ name = "wasmdbg-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bwasm",
+ "bwasm 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap",
  "colored",
  "linefeed",

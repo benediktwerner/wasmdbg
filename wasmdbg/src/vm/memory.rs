@@ -1,6 +1,6 @@
 use bwasm::{ResizableLimits, PAGE_SIZE};
 
-use super::{eval_init_expr, InitError, Trap, VMResult};
+use super::{ImportHandler, InitError, Trap, VMResult};
 use crate::value::LittleEndianConvert;
 
 pub const MEMORY_MAX_PAGES: u32 = 0x10000;
@@ -18,21 +18,21 @@ impl Memory {
         }
     }
 
-    pub fn from_module(module: &bwasm::Module) -> Result<Vec<Memory>, InitError> {
+    pub fn from_module(module: &bwasm::Module, import_handler: &ImportHandler) -> Result<Vec<Memory>, InitError> {
         let mut memories: Vec<_> = module.memories().iter().map(Memory::new).collect();
 
-        for init in module.memory_inits() {
-            let memory = &mut memories[init.index() as usize];
-            let offset = eval_init_expr(init.offset())?;
+        for init in module.memory_inits().iter().chain(&import_handler.memory_inits) {
+            let memory = &mut memories[init.index as usize];
+            let offset = import_handler.eval_init_expr(&init.offset)?;
             let offset = match offset.to::<u32>() {
                 Some(val) => val as usize,
                 None => return Err(InitError::OffsetInvalidType(offset.value_type())),
             };
-            let len = init.data().len();
+            let len = init.data.len();
             if offset + len > memory.data.len() {
                 memory.data.resize(offset + len, 0);
             }
-            memory.data[offset..offset + len].copy_from_slice(init.data());
+            memory.data[offset..offset + len].copy_from_slice(&init.data);
         }
 
         Ok(memories)

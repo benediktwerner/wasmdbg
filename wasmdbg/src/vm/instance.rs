@@ -6,7 +6,7 @@ use bwasm::{Function, Instruction, Module};
 use crate::value::{ExtendTo, Integer, LittleEndianConvert, Number, WrapTo};
 use crate::{Breakpoints, Value, F32, F64};
 
-use super::{eval_init_expr, CodePosition, InitError, Memory, Table, TableElement, Trap, VMResult};
+use super::{CodePosition, ImportHandler, InitError, Memory, Table, TableElement, Trap, VMResult};
 
 pub const VALUE_STACK_LIMIT: usize = 1024 * 1024;
 pub const LABEL_STACK_LIMIT: usize = 64 * 1024;
@@ -35,13 +35,18 @@ pub struct VM {
     function_stack: Vec<FunctionFrame>,
     trap: Option<Trap>,
     breakpoints: Rc<RefCell<Breakpoints>>,
+    import_handler: ImportHandler,
 }
 
 impl VM {
-    pub fn new(module: Rc<Module>, breakpoints: Rc<RefCell<Breakpoints>>) -> Result<VM, InitError> {
+    pub fn new(
+        module: Rc<Module>,
+        breakpoints: Rc<RefCell<Breakpoints>>,
+        import_handler: ImportHandler,
+    ) -> Result<VM, InitError> {
         let mut globals = Vec::with_capacity(module.globals().len());
         for global in module.globals() {
-            let val = eval_init_expr(global.init_expr())?;
+            let val = import_handler.eval_init_expr(global.init_expr())?;
             if val.value_type() != global.value_type() {
                 return Err(InitError::MismatchedType {
                     expected: global.value_type(),
@@ -50,8 +55,8 @@ impl VM {
             }
             globals.push(val);
         }
-        let memories = Memory::from_module(&module)?;
-        let tables = Table::from_module(&module)?;
+        let memories = Memory::from_module(&module, &import_handler)?;
+        let tables = Table::from_module(&module, &import_handler)?;
 
         Ok(VM {
             module,
@@ -64,6 +69,7 @@ impl VM {
             function_stack: Vec::new(),
             trap: None,
             breakpoints,
+            import_handler,
         })
     }
 
@@ -414,7 +420,7 @@ impl VM {
         Ok(())
     }
 
-    #[allow(clippy::float_cmp, clippy::redundant_closure)]
+    #[allow(clippy::redundant_closure)]
     fn execute_step_internal(&mut self) -> VMResult<()> {
         let func = self.module.get_func(self.ip.func_index).unwrap();
         if func.is_imported() {

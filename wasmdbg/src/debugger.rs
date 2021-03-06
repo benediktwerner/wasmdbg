@@ -4,7 +4,7 @@ use std::rc::Rc;
 use bwasm::{LoadError, Module};
 use thiserror::Error;
 
-use crate::vm::{CodePosition, InitError, Memory, Trap, VM};
+use crate::vm::{CodePosition, InitError, Memory, Trap, ImportHandler, VM};
 use crate::{Breakpoint, Breakpoints, File, Value};
 
 #[derive(Error, Clone, Debug)]
@@ -149,7 +149,7 @@ impl Debugger {
         let file = self.file.as_ref().ok_or(DebuggerError::NoFileLoaded)?;
         let module = Rc::clone(file.module());
         let breakpoints = Rc::clone(file.breakpoints());
-        self.vm = Some(VM::new(module, breakpoints).map_err(DebuggerError::InitError)?);
+        self.vm = Some(VM::new(module, breakpoints, ImportHandler::default()).map_err(DebuggerError::InitError)?);
         Ok(self.vm.as_mut().unwrap())
     }
 

@@ -1,20 +1,20 @@
-use bwasm::{InitExpr, ValueType};
+use bwasm::ValueType;
 use thiserror::Error;
 
-use crate::Value;
-
+mod imports;
 mod instance;
 mod memory;
 mod table;
 
+pub use imports::*;
 pub use instance::*;
 pub use memory::*;
 pub use table::*;
 
 #[derive(Error, Clone, Debug)]
 pub enum InitError {
-    #[error("Initalizer contains global.get which requires imports (unimplemented)")]
-    GlobalGetUnimplemented,
+    #[error("No initial value for imported global {0}")]
+    MissingImportedGlobalInit(u32),
     #[error("Initializer type mismatch. Expected \"{expected}\", found \"{found}\"")]
     MismatchedType { expected: ValueType, found: ValueType },
     #[error("Offset expr has invalid type. Expected \"i32\", found \"{0}\"")]
@@ -92,15 +92,4 @@ impl std::fmt::Display for CodePosition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}:{}", self.func_index, self.instr_index)
     }
-}
-
-fn eval_init_expr(init_expr: &InitExpr) -> Result<Value, InitError> {
-    let val = match init_expr {
-        InitExpr::I32Const(val) => Value::from(*val),
-        InitExpr::I64Const(val) => Value::from(*val),
-        InitExpr::F32Const(val) => Value::from(*val),
-        InitExpr::F64Const(val) => Value::from(*val),
-        InitExpr::Global(_) => return Err(InitError::GlobalGetUnimplemented),
-    };
-    Ok(val)
 }

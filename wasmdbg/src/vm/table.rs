@@ -1,6 +1,6 @@
 use bwasm;
 
-use super::{eval_init_expr, InitError};
+use super::{ImportHandler, InitError};
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum TableElement {
@@ -28,17 +28,17 @@ impl Table {
         self.elements.get(index as usize).copied().unwrap_or_default()
     }
 
-    pub fn from_module(module: &bwasm::Module) -> Result<Vec<Table>, InitError> {
+    pub fn from_module(module: &bwasm::Module, import_handler: &ImportHandler) -> Result<Vec<Table>, InitError> {
         let mut tables: Vec<_> = module.tables().iter().map(Table::new).collect();
 
-        for init in module.table_inits() {
-            let table = &mut tables[init.index() as usize];
-            let offset = eval_init_expr(init.offset())?;
+        for init in module.table_inits().iter().chain(&import_handler.table_inits) {
+            let table = &mut tables[init.index as usize];
+            let offset = import_handler.eval_init_expr(&init.offset)?;
             let offset = match offset.to::<i32>() {
                 Some(val) => val as usize,
                 None => return Err(InitError::OffsetInvalidType(offset.value_type())),
             };
-            for (i, ele) in init.entries().iter().enumerate() {
+            for (i, ele) in init.entries.iter().enumerate() {
                 let ele = TableElement::Func(*ele);
                 let index = i + offset;
                 if index >= table.elements.len() {

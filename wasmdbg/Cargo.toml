@@ -15,7 +15,7 @@ repository = "https://github.com/benediktwerner/wasmdbg.git"
 edition = "2018"
 
 [dependencies]
-bwasm = "0.1"
+bwasm = { path = "../../bwasm", version = "0.1" }
 thiserror = "1.0"
 
 [dev-dependencies]
